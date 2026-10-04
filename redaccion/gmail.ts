@@ -40,11 +40,12 @@ async function conGmail<T>(trabajo: (c: ImapFlow) => Promise<T>): Promise<T> {
   try {
     await c.connect();
   } catch (e) {
-    const detalle = e instanceof Error ? e.message : String(e);
-    throw new Error(
-      `No se pudo entrar en Gmail como ${process.env.GMAIL_USUARIO} (${detalle}). ` +
-        'Revisa GMAIL_USUARIO y GMAIL_CLAVE_APP en .env, y que IMAP esté permitido en la cuenta.',
-    );
+    const err = e as Error & { responseText?: string; authenticationFailed?: boolean };
+    const detalle = err.responseText ?? err.message ?? String(e);
+    const pista = err.authenticationFailed
+      ? 'Gmail rechaza la contraseña. GMAIL_CLAVE_APP debe ser una contraseña de aplicación (16 letras, creada en myaccount.google.com/apppasswords), no la contraseña normal de la cuenta.'
+      : 'Revisa GMAIL_USUARIO y GMAIL_CLAVE_APP en .env y la conexión a internet.';
+    throw new Error(`No se pudo entrar en Gmail como ${process.env.GMAIL_USUARIO} (${detalle}). ${pista}`);
   }
   try {
     return await trabajo(c);
