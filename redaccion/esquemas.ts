@@ -52,3 +52,17 @@ export const RevisionDiseno = Revision.extend({
   avisos: z.array(z.string()).describe('Problemas de encaje que no has podido resolver. Vacío si ninguno.'),
 });
 export type RevisionDiseno = z.infer<typeof RevisionDiseno>;
+
+/** Índice del correo: una entrada por noticia. Un boletín puede traer varias; un aviso suelto, una. */
+export const Indice = z.object({
+  piezas: z.array(
+    z.object({
+      titulo: z.string().describe('De qué trata esta noticia, en una línea.'),
+      resumen: z.string().describe('Qué dice el correo sobre ella, en dos o tres frases, con sus datos y enlaces.'),
+      es_noticia: z.boolean().describe('Si merece una pieza en Akari.'),
+      motivo: z.string().describe('Por qué sí o por qué no, en una frase.'),
+    }),
+  ),
+});
+export type Indice = z.infer<typeof Indice>;
+export type EntradaIndice = Indice['piezas'][number];

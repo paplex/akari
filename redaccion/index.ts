@@ -10,7 +10,7 @@
  */
 import { readdir } from 'node:fs/promises';
 import path from 'node:path';
-import { aclarar, contrastar, corregir, dictaminar, maquetar, redactar } from './agentes';
+import { aclarar, contrastar, corregir, dictaminar, indexar, maquetar, redactar } from './agentes';
 import {
   DIR_ENTRADA,
   DIR_HILOS,
@@ -24,10 +24,10 @@ import {
   slug,
   type Resultado,
 } from './archivo';
-import { consumoVacio, Rechazo, type Consumo } from './claude';
+import { consumoVacio, type Consumo } from './claude';
 import { interpretarCorreo, leerCorreo, type Correo } from './correo';
 import { etiquetarYArchivar, gmailConfigurado, leerBandeja, ETIQUETA } from './gmail';
-import type { Dictamen, Pieza, Revision, RevisionDiseno } from './esquemas';
+import type { Dictamen, EntradaIndice, Indice, Pieza, Revision, RevisionDiseno } from './esquemas';
 import { decidir, esUrl } from './publicacion';
 
 try {
@@ -47,7 +47,15 @@ const usarCarpeta = args.includes('--carpeta') || elegidos.length > 0;
 const coste = (c: Consumo) => `${c.dolares.toFixed(2)} USD aprox.`;
 const lista = (xs: string[]) => (xs.length ? xs.map((x) => `- ${x}`).join('\n') : '- (nada)');
 
+// Tope de noticias por correo: un boletín enorme no debe disparar el gasto sin que nadie lo vea.
+const MAX_PIEZAS = 8;
+
 interface Traza {
+  entrada: EntradaIndice;
+  resultado?: string;
+  pieza?: string;
+  hilo?: string;
+  motivos?: string[];
   nota?: string;
   dictamen?: Dictamen;
   periodista?: Pieza;
@@ -56,95 +64,156 @@ interface Traza {
   disenador?: RevisionDiseno;
 }
 
-function informe(c: Correo, t: Traza, resultado: string, consumo: Consumo, extra: string[] = []) {
-  const bloque = (titulo: string, o: unknown) => (o ? `\n## ${titulo}\n\n\`\`\`json\n${JSON.stringify(o, null, 2)}\n\`\`\`\n` : '');
-  return [
+const bloque = (titulo: string, o: unknown) =>
+  o ? `\n#### ${titulo}\n\n\`\`\`json\n${JSON.stringify(o, null, 2)}\n\`\`\`\n` : '';
+
+function informe(c: Correo, resultado: string, consumo: Consumo, indice: Indice | null, trazas: Traza[], error?: string) {
+  const partes = [
     `# ${c.asunto}`,
     '',
-    `- Archivo: ${path.basename(c.archivo)}`,
+    `- Origen: ${c.archivo}`,
     `- De: ${c.remitente}`,
     `- Fecha del correo: ${c.fecha.toISOString().slice(0, 10)}`,
-    `- Resultado: **${resultado}**`,
+    `- Resultado del correo: **${resultado}**`,
     `- Consumo: ${consumo.entrada} tokens de entrada, ${consumo.salida} de salida, ${consumo.busquedas} búsquedas web, ${coste(consumo)}`,
-    ...extra,
-    t.nota ? `\n## Especialista: nota de contraste\n\n${t.nota}\n` : '',
-    bloque('Especialista: dictamen', t.dictamen),
-    bloque('Periodista', t.periodista),
-    bloque('Pedagogo', t.pedagogo),
-    bloque('Lingüista', t.linguista),
-    bloque('Diseñador', t.disenador),
-  ].join('\n');
+  ];
+  if (error) partes.push(`- Error: ${error}`);
+  if (indice) {
+    partes.push('', '## Índice del especialista', '');
+    for (const e of indice.piezas) partes.push(`- ${e.es_noticia ? '**Sí**' : 'No'}: ${e.titulo}. _${e.motivo}_`);
+  }
+  for (const t of trazas) {
+    partes.push('', `## ${t.entrada.titulo}`, '', `- Resultado: **${t.resultado ?? 'sin terminar'}**`);
+    if (t.pieza) partes.push(`- Pieza: src/content/noticias/${t.pieza}.md`);
+    if (t.hilo) partes.push(`- Hilo: ${t.hilo}`);
+    if (t.motivos?.length) partes.push('', 'Motivos de revisión:', '', lista(t.motivos));
+    if (t.nota) partes.push('', '#### Especialista: nota de contraste', '', t.nota);
+    partes.push(
+      bloque('Especialista: dictamen', t.dictamen),
+      bloque('Periodista', t.periodista),
+      bloque('Pedagogo', t.pedagogo),
+      bloque('Lingüista', t.linguista),
+      bloque('Diseñador', t.disenador),
+    );
+  }
+  return partes.join('\n');
 }
 
-async function procesar(c: Correo): Promise<{ resultado: Resultado; pieza?: string; detalle: string; consumo: Consumo }> {
-  const consumo = consumoVacio();
-  const t: Traza = {};
-  const nombreInforme = `${c.fecha.toISOString().slice(0, 10)}-${slug(c.asunto, 50) || 'correo'}`;
+/** Una noticia del correo, de principio a fin: contraste, dictamen, redacción, regla y archivo. */
+async function procesarNoticia(c: Correo, t: Traza, consumo: Consumo): Promise<Resultado> {
+  // Se relee en cada noticia para ver también las piezas escritas en esta misma pasada.
+  const { hilos, piezas } = await leerContexto();
+  const e = t.entrada;
 
-  try {
-    const { hilos, piezas } = await leerContexto();
-
-    t.nota = await contrastar(c, consumo);
-    const d = (t.dictamen = await dictaminar(c, t.nota, hilos, piezas, consumo));
-
-    if (!d.es_noticia) {
-      await guardarInforme(nombreInforme, informe(c, t, 'descartado', consumo));
-      return { resultado: 'descartado', detalle: d.motivo, consumo };
-    }
-    if (d.duplicado_de) {
-      await guardarInforme(nombreInforme, informe(c, t, `duplicado de ${d.duplicado_de}`, consumo));
-      return { resultado: 'duplicado', detalle: `Ya publicada: ${d.duplicado_de}`, consumo };
-    }
-
-    t.periodista = await redactar(c, d, consumo);
-    t.pedagogo = await aclarar(d, t.periodista, consumo);
-    t.linguista = await corregir(t.pedagogo, consumo);
-    const p = (t.disenador = await maquetar(d, t.linguista, consumo));
-
-    const { estado, motivos } = decidir(d, p);
-
-    // Hilo: el existente si de verdad existe; uno nuevo si el especialista lo propone.
-    let hilo: string | undefined;
-    if (d.hilo.accion === 'existente') {
-      if (hilos.some((h) => h.id === d.hilo.id)) hilo = d.hilo.id;
-      else motivos.push(`El especialista asignó un hilo que no existe (${d.hilo.id}); la pieza queda sin hilo.`);
-    } else if (d.hilo.accion === 'nuevo') {
-      const titulo = p.titulo_hilo || d.hilo.titulo;
-      hilo = await nombreLibre(DIR_HILOS, slug(titulo, 60));
-      await escribirMarkdown(DIR_HILOS, hilo, { titulo, materia: d.materia });
-    }
-    const estadoFinal = motivos.length ? 'pendiente' : estado;
-
-    const fecha = /^\d{4}-\d{2}-\d{2}$/.test(d.fecha) ? d.fecha : c.fecha.toISOString().slice(0, 10);
-    const nombre = await nombreLibre(DIR_NOTICIAS, slug(p.titulo));
-    await escribirMarkdown(
-      DIR_NOTICIAS,
-      nombre,
-      {
-        titulo: p.titulo,
-        tipo: d.tipo,
-        materia: d.materia,
-        esencial: p.esencial,
-        afecta: p.afecta,
-        practica: p.practica,
-        fuente: { nombre: d.fuente.nombre, enlace: esUrl(d.fuente.enlace) ? d.fuente.enlace : undefined },
-        fecha,
-        hilo,
-        estado: estadoFinal,
-        motivos: motivos.length ? motivos : undefined,
-        origen: c.id,
-      },
-      p.desarrollo,
-    );
-
-    const extra = [`- Pieza: src/content/noticias/${nombre}.md`, hilo ? `- Hilo: ${hilo}` : '', '', '## Motivos de revisión', '', lista(motivos)];
-    await guardarInforme(nombreInforme, informe(c, t, estadoFinal, consumo, extra));
-    return { resultado: estadoFinal, pieza: nombre, detalle: motivos.join(' ') || 'Publicada automáticamente.', consumo };
-  } catch (e) {
-    const motivo = e instanceof Rechazo ? e.message : e instanceof Error ? e.message : String(e);
-    await guardarInforme(nombreInforme, informe(c, t, 'error', consumo, ['', `Error: ${motivo}`]));
-    return { resultado: 'error', detalle: motivo, consumo };
+  t.nota = await contrastar(c, e, consumo);
+  const d = (t.dictamen = await dictaminar(c, e, t.nota, hilos, piezas, consumo));
+  if (!d.es_noticia) {
+    t.resultado = 'descartado';
+    return 'descartado';
   }
+  if (d.duplicado_de) {
+    t.motivos = [`Ya publicada: ${d.duplicado_de}`];
+    t.resultado = 'duplicado';
+    return 'duplicado';
+  }
+
+  t.periodista = await redactar(c, e, d, consumo);
+  t.pedagogo = await aclarar(d, t.periodista, consumo);
+  t.linguista = await corregir(t.pedagogo, consumo);
+  const p = (t.disenador = await maquetar(d, t.linguista, consumo));
+
+  const { motivos } = decidir(d, p);
+
+  // Hilo: el existente si de verdad existe; uno nuevo si el especialista lo propone.
+  if (d.hilo.accion === 'existente') {
+    if (hilos.some((h) => h.id === d.hilo.id)) t.hilo = d.hilo.id;
+    else motivos.push(`El especialista asignó un hilo que no existe (${d.hilo.id}); la pieza queda sin hilo.`);
+  } else if (d.hilo.accion === 'nuevo') {
+    const titulo = p.titulo_hilo || d.hilo.titulo;
+    t.hilo = await nombreLibre(DIR_HILOS, slug(titulo, 60));
+    await escribirMarkdown(DIR_HILOS, t.hilo, { titulo, materia: d.materia });
+  }
+  const estado = motivos.length ? 'pendiente' : 'auto';
+
+  const fecha = /^\d{4}-\d{2}-\d{2}$/.test(d.fecha) ? d.fecha : c.fecha.toISOString().slice(0, 10);
+  t.pieza = await nombreLibre(DIR_NOTICIAS, slug(p.titulo));
+  await escribirMarkdown(
+    DIR_NOTICIAS,
+    t.pieza,
+    {
+      titulo: p.titulo,
+      tipo: d.tipo,
+      materia: d.materia,
+      esencial: p.esencial,
+      afecta: p.afecta,
+      practica: p.practica,
+      fuente: { nombre: d.fuente.nombre, enlace: esUrl(d.fuente.enlace) ? d.fuente.enlace : undefined },
+      fecha,
+      hilo: t.hilo,
+      estado,
+      motivos: motivos.length ? motivos : undefined,
+      origen: c.id,
+    },
+    p.desarrollo,
+  );
+  t.motivos = motivos;
+  t.resultado = estado;
+  return estado;
+}
+
+/**
+ * Un correo entero. El especialista lo separa en noticias y cada una sigue su camino.
+ * El resultado del correo resume el de sus noticias: "pendiente" si alguna necesita
+ * revisión o falló, "auto" si todas salieron solas, "descartado" si no había nada.
+ */
+async function procesar(c: Correo): Promise<{ resultado: Resultado; piezas: string[]; detalle: string; consumo: Consumo }> {
+  const consumo = consumoVacio();
+  const nombreInforme = `${c.fecha.toISOString().slice(0, 10)}-${slug(c.asunto, 50) || 'correo'}`;
+  const trazas: Traza[] = [];
+
+  let indice: Indice;
+  try {
+    const { piezas } = await leerContexto();
+    indice = await indexar(c, piezas, consumo);
+  } catch (e) {
+    const motivo = e instanceof Error ? e.message : String(e);
+    await guardarInforme(nombreInforme, informe(c, 'error', consumo, null, trazas, motivo));
+    return { resultado: 'error', piezas: [], detalle: motivo, consumo };
+  }
+
+  const elegidas = indice.piezas.filter((e) => e.es_noticia);
+  const sobrantes = elegidas.slice(MAX_PIEZAS);
+  const fallos: string[] = [];
+
+  for (const entrada of elegidas.slice(0, MAX_PIEZAS)) {
+    const t: Traza = { entrada };
+    trazas.push(t);
+    console.log(`    · ${entrada.titulo}`);
+    try {
+      const r = await procesarNoticia(c, t, consumo);
+      console.log(`      ${r}${t.pieza ? ` → ${t.pieza}` : ''}`);
+    } catch (e) {
+      const motivo = e instanceof Error ? e.message : String(e);
+      t.resultado = `error: ${motivo}`;
+      fallos.push(`${entrada.titulo}: ${motivo}`);
+      console.log(`      error: ${motivo}`);
+    }
+  }
+
+  const estados = trazas.map((t) => t.resultado);
+  const resultado: Resultado =
+    fallos.length || sobrantes.length || estados.includes('pendiente')
+      ? 'pendiente'
+      : estados.includes('auto')
+        ? 'auto'
+        : 'descartado';
+
+  const notas = [`${elegidas.length} noticia(s) de ${indice.piezas.length} en el índice.`];
+  if (fallos.length) notas.push(`Fallaron: ${fallos.join('; ')}.`);
+  if (sobrantes.length) notas.push(`Sin procesar por el tope de ${MAX_PIEZAS}: ${sobrantes.map((e) => e.titulo).join('; ')}.`);
+
+  await guardarInforme(nombreInforme, informe(c, resultado, consumo, indice, trazas, fallos.join(' ') || undefined));
+  return { resultado, piezas: trazas.flatMap((t) => (t.pieza ? [t.pieza] : [])), detalle: notas.join(' '), consumo };
 }
 
 interface Fuente {
@@ -222,14 +291,14 @@ async function main() {
       const r = await procesar(correo);
       for (const k of ['entrada', 'salida', 'busquedas', 'dolares'] as const) total[k] += r.consumo[k];
       cuenta[r.resultado] = (cuenta[r.resultado] ?? 0) + 1;
-      console.log(`  ${r.resultado}${r.pieza ? ` → ${r.pieza}` : ''}. ${r.detalle} (${coste(r.consumo)})`);
+      console.log(`  ${r.resultado}${r.piezas.length ? ` → ${r.piezas.join(', ')}` : ''}. ${r.detalle} (${coste(r.consumo)})`);
 
       // Los errores no se registran ni se etiquetan, para que se reintenten en la próxima pasada.
       if (r.resultado !== 'error') {
         registro[correo.id] = {
           archivo: etiqueta,
           resultado: r.resultado,
-          pieza: r.pieza,
+          pieza: r.piezas.join(', ') || undefined,
           fecha: new Date().toISOString(),
           detalle: r.detalle,
         };

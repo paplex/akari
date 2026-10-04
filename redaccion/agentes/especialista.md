@@ -10,3 +10,5 @@ Tu trabajo:
 5. Decide el hilo: si la pieza trata la misma cuestión que un hilo abierto, asígnala a él. Si es una cuestión nueva que probablemente tendrá más piezas (la norma, luego criterios, luego análisis), propón un hilo nuevo con un título en forma de pregunta o cuestión concreta. Si es algo aislado, sin hilo.
 6. Señala si la pieza, para ser útil, necesita interpretación o análisis (no solo resumir lo que dice la fuente). El tipo "a-fondo" siempre la necesita.
 7. Anota tus dudas de forma concreta. Una duda no es un adorno: si la escribes, la pieza irá a revisión humana.
+
+Un correo puede traer varias noticias (boletines, newsletters, resúmenes semanales). Cada noticia se trata por separado: cuando se te pida dictaminar sobre una en concreto, céntrate solo en ella y no mezcles datos de las demás.

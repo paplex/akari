@@ -74,17 +74,21 @@ export async function leerBandeja(max: number): Promise<MensajeBandeja[]> {
 export async function etiquetarYArchivar(hechos: { uid: number; resultado: Exclude<Resultado, 'error'> }[]) {
   if (!hechos.length) return;
   await conGmail(async (c) => {
-    const existentes = new Set((await c.list()).map((m) => m.path));
+    const buzones = await c.list();
+    const existentes = new Set(buzones.map((m) => m.path));
     for (const etiqueta of new Set(Object.values(ETIQUETA))) {
       if (!existentes.has(etiqueta)) await c.mailboxCreate(etiqueta);
     }
+    // "Todos los correos" cambia de nombre según el idioma de la cuenta; se busca por su uso.
+    const todos = buzones.find((m) => m.specialUse === '\\All')?.path ?? '[Gmail]/All Mail';
     const lock = await c.getMailboxLock('INBOX');
     try {
       for (const { uid, resultado } of hechos) {
         await c.messageFlagsAdd(String(uid), [ETIQUETA[resultado]], { uid: true, useLabels: true });
-        // En Gmail, quitar la etiqueta \Inbox equivale a archivar.
-        await c.messageFlagsRemove(String(uid), ['\\Inbox'], { uid: true, useLabels: true });
       }
+      // Archivar en Gmail es sacar el correo de la bandeja: se mueve a "Todos los correos"
+      // y conserva sus etiquetas.
+      await c.messageMove(hechos.map((h) => h.uid).join(','), todos, { uid: true });
     } finally {
       lock.release();
     }
