@@ -31,7 +31,11 @@ const direccion = (a: AddressObject | AddressObject[] | undefined) =>
   (Array.isArray(a) ? a.map((x) => x.text).join(', ') : a?.text) ?? '';
 
 export async function leerCorreo(ruta: string): Promise<Correo> {
-  const bruto = await readFile(ruta);
+  return interpretarCorreo(await readFile(ruta), ruta);
+}
+
+/** Convierte un mensaje en bruto (RFC 822), venga de un .eml o de Gmail, en un Correo. */
+export async function interpretarCorreo(bruto: Buffer, origen: string): Promise<Correo> {
   const m = await simpleParser(bruto);
 
   const html = typeof m.html === 'string' ? m.html : '';
@@ -62,7 +66,7 @@ export async function leerCorreo(ruta: string): Promise<Correo> {
 
   return {
     id,
-    archivo: ruta,
+    archivo: origen,
     remitente: direccion(m.from),
     asunto: m.subject ?? '(sin asunto)',
     fecha: m.date ?? new Date(),

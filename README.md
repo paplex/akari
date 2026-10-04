@@ -50,13 +50,22 @@ Las noticias en estado `pendiente` no salen en ninguna página; solo suman en el
 
 La portada muestra siempre la noticia publicada más reciente.
 
-## Redacción automática (fase 2)
+## Redacción automática desde Gmail
 
-Convierte correos en piezas con cinco agentes de Claude y una regla de publicación fija.
+Lee el Gmail dedicado, convierte cada correo en una pieza con cinco agentes de Claude y aplica una regla de publicación fija.
 
-1. Crea un archivo `.env` en la raíz con tu clave de la API de Claude: `ANTHROPIC_API_KEY=...` (no se sube a GitHub).
-2. Guarda los correos como `.eml` en `entrada/` (en Gmail: tres puntos, "Descargar mensaje").
-3. Ejecuta `npm run redaccion`.
+### Puesta en marcha (una vez)
+
+1. En la cuenta de Gmail dedicada, activa la verificación en dos pasos (myaccount.google.com > Seguridad).
+2. En myaccount.google.com/apppasswords crea una contraseña de aplicación llamada "Akari".
+3. Copia `.env.ejemplo` como `.env` y rellena la clave de Claude, la dirección de Gmail y la contraseña de aplicación.
+4. Comprueba la conexión sin gastar nada: `npm run redaccion -- --listar`.
+
+### Uso
+
+- `npm run redaccion`: procesa la bandeja de entrada (hasta 20 correos por pasada; `-- --max 5` para menos).
+- Cada correo procesado recibe en Gmail la etiqueta `Akari/publicada`, `Akari/pendiente` o `Akari/descartada` y se archiva. Los que dan error se quedan en la bandeja y se reintentan en la siguiente pasada.
+- Alternativa sin Gmail: deja archivos `.eml` en `entrada/` y usa `npm run redaccion -- --carpeta`.
 
 Cada correo pasa por:
 

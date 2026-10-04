@@ -1,8 +1,11 @@
 /**
- * Redacción de Akari: convierte los correos de entrada/ en piezas.
+ * Redacción de Akari: convierte los correos del Gmail dedicado en piezas.
  *
- *   npm run redaccion                       procesa los .eml nuevos de entrada/
- *   npm run redaccion -- entrada/x.eml      procesa solo ese correo
+ *   npm run redaccion                       procesa la bandeja de entrada de Gmail
+ *   npm run redaccion -- --listar           solo enseña qué hay en la bandeja (no gasta API)
+ *   npm run redaccion -- --max 5            procesa como mucho 5 correos (por defecto, 20)
+ *   npm run redaccion -- --carpeta          usa los .eml de entrada/ en lugar de Gmail
+ *   npm run redaccion -- entrada/x.eml      procesa solo ese archivo
  *   npm run redaccion -- --repetir          vuelve a procesar también los ya hechos
  */
 import { readdir } from 'node:fs/promises';
@@ -22,7 +25,8 @@ import {
   type Resultado,
 } from './archivo';
 import { consumoVacio, Rechazo, type Consumo } from './claude';
-import { leerCorreo, type Correo } from './correo';
+import { interpretarCorreo, leerCorreo, type Correo } from './correo';
+import { etiquetarYArchivar, gmailConfigurado, leerBandeja, ETIQUETA } from './gmail';
 import type { Dictamen, Pieza, Revision, RevisionDiseno } from './esquemas';
 import { decidir, esUrl } from './publicacion';
 
@@ -34,7 +38,11 @@ try {
 
 const args = process.argv.slice(2);
 const repetir = args.includes('--repetir');
-const elegidos = args.filter((a) => !a.startsWith('--'));
+const listar = args.includes('--listar');
+const iMax = args.indexOf('--max');
+const max = iMax >= 0 ? Math.max(1, Number(args[iMax + 1]) || 20) : 20;
+const elegidos = args.filter((a, i) => !a.startsWith('--') && args[i - 1] !== '--max');
+const usarCarpeta = args.includes('--carpeta') || elegidos.length > 0;
 
 const coste = (c: Consumo) => `${c.dolares.toFixed(2)} USD aprox.`;
 const lista = (xs: string[]) => (xs.length ? xs.map((x) => `- ${x}`).join('\n') : '- (nada)');
@@ -139,52 +147,105 @@ async function procesar(c: Correo): Promise<{ resultado: Resultado; pieza?: stri
   }
 }
 
+interface Fuente {
+  /** Nombre para mostrar en pantalla. */
+  etiqueta: string;
+  correo: Correo;
+  /** UID en Gmail, si viene de allí. */
+  uid?: number;
+}
+
+async function fuentes(): Promise<Fuente[]> {
+  if (usarCarpeta) {
+    const archivos = elegidos.length
+      ? elegidos.map((a) => path.resolve(a))
+      : (await readdir(DIR_ENTRADA)).filter((f) => f.toLowerCase().endsWith('.eml')).map((f) => path.join(DIR_ENTRADA, f));
+    return Promise.all(archivos.slice(0, max).map(async (a) => ({ etiqueta: path.basename(a), correo: await leerCorreo(a) })));
+  }
+  const bandeja = await leerBandeja(max);
+  return Promise.all(
+    bandeja.map(async (m) => ({ etiqueta: `Gmail #${m.uid}`, correo: await interpretarCorreo(m.bruto, `gmail:${m.uid}`), uid: m.uid })),
+  );
+}
+
 async function main() {
-  if (!process.env.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_AUTH_TOKEN) {
-    console.error('Falta la clave de la API de Claude. Crea un archivo .env en la raíz con la línea:\nANTHROPIC_API_KEY=tu-clave');
+  if (!usarCarpeta && !gmailConfigurado()) {
+    console.error(
+      [
+        'Falta la conexión con Gmail. Añade a .env estas dos líneas:',
+        'GMAIL_USUARIO=direccion@gmail.com',
+        'GMAIL_CLAVE_APP=la contraseña de aplicación',
+        'O usa los .eml de entrada/ con: npm run redaccion -- --carpeta',
+      ].join('\n'),
+    );
     process.exit(1);
   }
 
-  const archivos = elegidos.length
-    ? elegidos.map((a) => path.resolve(a))
-    : (await readdir(DIR_ENTRADA)).filter((f) => f.toLowerCase().endsWith('.eml')).map((f) => path.join(DIR_ENTRADA, f));
-
-  if (!archivos.length) {
-    console.log('No hay correos .eml en entrada/.');
+  const registro = await leerRegistro();
+  const lote = await fuentes();
+  if (!lote.length) {
+    console.log(usarCarpeta ? 'No hay correos .eml en entrada/.' : 'La bandeja de entrada de Gmail está vacía.');
     return;
   }
 
-  const registro = await leerRegistro();
+  if (listar) {
+    for (const { etiqueta, correo } of lote) {
+      const previo = registro[correo.id];
+      console.log(
+        `${etiqueta}  ${correo.fecha.toISOString().slice(0, 10)}  ${correo.remitente}\n    ${correo.asunto}` +
+          `${correo.adjuntos.length ? `  [${correo.adjuntos.length} adjunto(s)]` : ''}${previo ? `  (ya procesado: ${previo.resultado})` : ''}`,
+      );
+    }
+    console.log(`\n${lote.length} correo(s). No se ha procesado nada.`);
+    return;
+  }
+
+  if (!process.env.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_AUTH_TOKEN) {
+    console.error('Falta la clave de la API de Claude. Añade a .env la línea:\nANTHROPIC_API_KEY=tu-clave');
+    process.exit(1);
+  }
+
   const total = consumoVacio();
   const cuenta: Record<string, number> = {};
+  const paraEtiquetar: { uid: number; resultado: keyof typeof ETIQUETA }[] = [];
 
-  for (const archivo of archivos) {
-    const correo = await leerCorreo(archivo);
-    if (registro[correo.id] && !repetir) {
-      console.log(`· ${path.basename(archivo)}: ya procesado (${registro[correo.id].resultado}), se omite.`);
-      continue;
+  try {
+    for (const { etiqueta, correo, uid } of lote) {
+      const previo = registro[correo.id];
+      if (previo && !repetir) {
+        // Ya procesado en una pasada anterior que no llegó a etiquetarlo: solo se etiqueta.
+        if (uid !== undefined && previo.resultado !== 'error') paraEtiquetar.push({ uid, resultado: previo.resultado });
+        console.log(`· ${etiqueta}: ya procesado (${previo.resultado}), se omite.`);
+        continue;
+      }
+      console.log(`→ ${etiqueta}: ${correo.asunto}`);
+      const r = await procesar(correo);
+      for (const k of ['entrada', 'salida', 'busquedas', 'dolares'] as const) total[k] += r.consumo[k];
+      cuenta[r.resultado] = (cuenta[r.resultado] ?? 0) + 1;
+      console.log(`  ${r.resultado}${r.pieza ? ` → ${r.pieza}` : ''}. ${r.detalle} (${coste(r.consumo)})`);
+
+      // Los errores no se registran ni se etiquetan, para que se reintenten en la próxima pasada.
+      if (r.resultado !== 'error') {
+        registro[correo.id] = {
+          archivo: etiqueta,
+          resultado: r.resultado,
+          pieza: r.pieza,
+          fecha: new Date().toISOString(),
+          detalle: r.detalle,
+        };
+        await guardarRegistro(registro);
+        if (uid !== undefined) paraEtiquetar.push({ uid, resultado: r.resultado });
+      }
     }
-    console.log(`→ ${path.basename(archivo)}: ${correo.asunto}`);
-    const r = await procesar(correo);
-    for (const k of ['entrada', 'salida', 'busquedas', 'dolares'] as const) total[k] += r.consumo[k];
-    cuenta[r.resultado] = (cuenta[r.resultado] ?? 0) + 1;
-    console.log(`  ${r.resultado}${r.pieza ? ` → ${r.pieza}` : ''}. ${r.detalle} (${coste(r.consumo)})`);
-
-    // Los errores no se registran, para que se reintenten en la próxima pasada.
-    if (r.resultado !== 'error') {
-      registro[correo.id] = {
-        archivo: path.basename(archivo),
-        resultado: r.resultado,
-        pieza: r.pieza,
-        fecha: new Date().toISOString(),
-        detalle: r.detalle,
-      };
-      await guardarRegistro(registro);
+  } finally {
+    if (paraEtiquetar.length) {
+      await etiquetarYArchivar(paraEtiquetar);
+      console.log(`\n${paraEtiquetar.length} correo(s) etiquetados y archivados en Gmail.`);
     }
   }
 
   const resumen = Object.entries(cuenta).map(([k, v]) => `${v} ${k}`).join(', ');
-  console.log(`\nHecho: ${resumen || 'nada nuevo'}. Coste total: ${coste(total)}. Informes en redaccion/informes/.`);
+  console.log(`\nHecho:${resumen || 'nada nuevo'}. Coste total: ${coste(total)}. Informes en redaccion/informes/.`);
 }
 
 main().catch((e) => {

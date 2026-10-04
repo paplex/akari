@@ -18,6 +18,7 @@
     "astro": "^7.3.5",
     "gray-matter": "^4.0.3",
     "html-to-text": "^10.0.1",
+    "imapflow": "^2.2.4",
     "mailparser": "^3.9.34",
     "zod": "^4.6.5"
   },

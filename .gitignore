@@ -12,3 +12,4 @@ npm-debug.log*
 entrada/*
 !entrada/LEEME.md
 redaccion/informes/
+!.env.ejemplo
