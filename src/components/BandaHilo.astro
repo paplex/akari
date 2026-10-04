@@ -1,0 +1,233 @@
+---
+import type { HiloConPasos, Noticia } from '../lib/akari';
+
+interface Props {
+  hilo: HiloConPasos;
+  actual: Noticia;
+}
+
+const { hilo, actual } = Astro.props;
+const pasoActual = hilo.pasos.findIndex((p) => p.tipo === actual.data.tipo);
+const idTitulo = `banda-${hilo.hilo.id}`;
+---
+
+<section class="banda" aria-labelledby={idTitulo}>
+  <div class="contenedor">
+    <h2 class="banda__rotulo" id={idTitulo}>El hilo de esta noticia</h2>
+    <p class="banda__titulo">
+      <a href={`/hilos/${hilo.hilo.id}/#${actual.data.tipo}`}>{hilo.hilo.data.titulo}</a>
+    </p>
+
+    <ol class="pasos" data-paso-actual={pasoActual}>
+      {
+        hilo.pasos.map((paso) => {
+          const esActual = paso.indice === pasoActual;
+          const estado = esActual ? 'actual' : paso.piezas.length ? 'lleno' : 'vacio';
+          return (
+            <li class="paso" data-estado={estado}>
+              <span class="paso__punto" aria-hidden="true" />
+              <p class="paso__aqui" aria-hidden="true">
+                {esActual ? 'Estás aquí' : ' '}
+              </p>
+              <h3 class="palabra paso__palabra">{paso.palabra}</h3>
+              {paso.piezas.length ? (
+                <ul class="paso__piezas">
+                  {paso.piezas.map((p) =>
+                    p.id === actual.id ? (
+                      <li>
+                        <span class="paso__esta" aria-current="page">
+                          <span class="sr-only">Estás aquí: </span>
+                          {p.data.titulo}
+                        </span>
+                      </li>
+                    ) : (
+                      <li>
+                        <a href={`/noticias/${p.id}/`} data-paso={paso.indice}>
+                          {p.data.titulo}
+                        </a>
+                      </li>
+                    ),
+                  )}
+                </ul>
+              ) : (
+                <p class="paso__vacio">Todavía sin piezas en este paso.</p>
+              )}
+            </li>
+          );
+        })
+      }
+    </ol>
+  </div>
+</section>
+
+<style>
+  .banda {
+    margin-top: clamp(64px, 9vw, 120px);
+    padding-block: clamp(48px, 7vw, 96px);
+    background: var(--tinta);
+    color: var(--papel);
+  }
+
+  .banda__rotulo {
+    font-size: 0.9375rem;
+    font-weight: 500;
+    color: var(--banda-texto);
+  }
+
+  .banda__titulo {
+    margin-top: 10px;
+    max-width: 30ch;
+    font-size: clamp(1.5rem, 1.1rem + 1.4vw, 2.375rem);
+    font-weight: 600;
+    line-height: 1.12;
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+  }
+
+  .banda__titulo a {
+    text-decoration: none;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .banda__titulo a:hover {
+      text-decoration: underline;
+      text-decoration-thickness: 2px;
+    }
+  }
+
+  /* Línea horizontal con un punto por paso. */
+  .pasos {
+    --punto: 16px;
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: clamp(24px, 3vw, 48px);
+    margin-top: clamp(40px, 5vw, 64px);
+  }
+
+  .pasos::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: calc(var(--punto) / 2);
+    height: 1px;
+    background: var(--banda-linea);
+  }
+
+  .paso {
+    position: relative;
+    min-width: 0;
+  }
+
+  .paso__punto {
+    position: relative;
+    display: block;
+    width: var(--punto);
+    height: var(--punto);
+    border-radius: 50%;
+    border: 2px solid var(--papel);
+    background: var(--tinta);
+  }
+
+  .paso[data-estado='vacio'] .paso__punto {
+    border-color: var(--banda-apagado);
+  }
+
+  .paso[data-estado='actual'] .paso__punto {
+    border-color: var(--azul-claro);
+    background: var(--azul-claro);
+  }
+
+  .paso__aqui {
+    margin-top: 14px;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--azul-claro);
+  }
+
+  .paso__palabra {
+    display: block;
+    margin-top: 6px;
+    font-size: clamp(2.75rem, 1.5rem + 3.6vw, 5rem);
+    line-height: 1;
+    color: var(--papel);
+  }
+
+  .paso[data-estado='vacio'] .paso__palabra {
+    color: var(--banda-apagado);
+  }
+
+  .paso[data-estado='actual'] .paso__palabra {
+    color: var(--azul-claro);
+  }
+
+  .paso__piezas {
+    display: grid;
+    gap: 14px;
+    margin-top: 18px;
+  }
+
+  .paso__piezas a,
+  .paso__esta {
+    display: block;
+    max-width: 34ch;
+    font-size: 1rem;
+    line-height: 1.4;
+  }
+
+  .paso__piezas a {
+    text-decoration-color: var(--banda-linea);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .paso__piezas a:hover {
+      text-decoration-color: currentColor;
+    }
+  }
+
+  .paso__esta {
+    color: var(--banda-texto);
+  }
+
+  .paso__vacio {
+    margin-top: 18px;
+    font-size: 0.9375rem;
+    color: var(--banda-texto);
+  }
+
+  /* En móvil la línea pasa a vertical y los pasos se apilan. */
+  @media (max-width: 767px) {
+    .pasos {
+      grid-template-columns: 1fr;
+      gap: 40px;
+    }
+
+    .pasos::before {
+      left: calc(var(--punto) / 2);
+      right: auto;
+      top: 0;
+      bottom: 0;
+      width: 1px;
+      height: auto;
+    }
+
+    .paso {
+      padding-left: calc(var(--punto) + 20px);
+    }
+
+    .paso__punto {
+      position: absolute;
+      left: 0;
+      top: 0;
+    }
+
+    .paso__aqui {
+      margin-top: 0;
+    }
+
+    .paso[data-estado]:not([data-estado='actual']) .paso__aqui {
+      display: none;
+    }
+  }
+</style>

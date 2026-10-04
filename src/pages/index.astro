@@ -1,0 +1,70 @@
+---
+import Base from '../layouts/Base.astro';
+import Pieza from '../components/Pieza.astro';
+import BandaHilo from '../components/BandaHilo.astro';
+import FilaHilo from '../components/FilaHilo.astro';
+import { getPublicadas, getHilo, getHilos } from '../lib/akari';
+
+const publicadas = await getPublicadas();
+const protagonista = publicadas[0];
+const suHilo = protagonista?.data.hilo ? await getHilo(protagonista.data.hilo.id, publicadas) : null;
+const otros = (await getHilos(publicadas)).filter((h) => h.hilo.id !== suHilo?.hilo.id);
+---
+
+<Base>
+  {
+    protagonista ? (
+      <>
+        <Pieza noticia={protagonista} enlazar />
+        {suHilo && <BandaHilo hilo={suHilo} actual={protagonista} />}
+      </>
+    ) : (
+      <div class="contenedor vacio">
+        <h1>Todavía no hay noticias publicadas.</h1>
+        <p>Cuando llegue la primera, aparecerá aquí con su ficha y su hilo.</p>
+      </div>
+    )
+  }
+
+  {
+    otros.length > 0 && (
+      <section class="contenedor otros" aria-labelledby="otros-hilos">
+        <h2 class="otros__titulo" id="otros-hilos">
+          Otros hilos abiertos
+        </h2>
+        <ul>
+          {otros.map((h) => (
+            <FilaHilo hilo={h} />
+          ))}
+        </ul>
+      </section>
+    )
+  }
+</Base>
+
+<style>
+  .otros {
+    margin-top: clamp(64px, 9vw, 120px);
+  }
+
+  .otros__titulo {
+    margin-bottom: clamp(20px, 3vw, 32px);
+    font-size: clamp(1.5rem, 1.2rem + 1vw, 2rem);
+    font-weight: 650;
+    letter-spacing: -0.02em;
+  }
+
+  .vacio {
+    padding-block: clamp(64px, 12vw, 160px);
+  }
+
+  .vacio h1 {
+    font-size: clamp(1.75rem, 1.2rem + 2vw, 3rem);
+    letter-spacing: -0.025em;
+  }
+
+  .vacio p {
+    margin-top: 12px;
+    color: var(--gris);
+  }
+</style>

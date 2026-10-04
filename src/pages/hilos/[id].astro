@@ -1,0 +1,395 @@
+---
+import Base from '../../layouts/Base.astro';
+import { getCollection } from 'astro:content';
+import { getHilo, MATERIA, fecha, fechaISO, type Tipo } from '../../lib/akari';
+
+export async function getStaticPaths() {
+  const hilos = await getCollection('hilos');
+  return hilos.map((h) => ({ params: { id: h.id } }));
+}
+
+const hilo = (await getHilo(Astro.params.id!))!;
+const { titulo, materia } = hilo.hilo.data;
+
+const QUE_ES: Record<Tipo, string> = {
+  cambia: 'una novedad normativa',
+  'se-aclara': 'un criterio o una interpretación',
+  'a-fondo': 'un análisis',
+};
+
+// Paso abierto al llegar: el de la pieza más reciente. El enlace con #paso lo cambia en el navegador.
+const masReciente = hilo.pasos
+  .flatMap((p) => p.piezas)
+  .sort((a, b) => b.data.fecha.getTime() - a.data.fecha.getTime())[0];
+const inicial = masReciente?.data.tipo ?? 'cambia';
+const recuento = (n: number) => (n === 0 ? 'Sin piezas' : n === 1 ? '1 pieza' : `${n} piezas`);
+---
+
+<Base titulo={titulo}>
+  <div class="contenedor cabeza">
+    <p class="cabeza__materia"><a href={`/materia/${materia}/`}>{MATERIA[materia]}</a></p>
+    <h1 class="cabeza__titulo">{titulo}</h1>
+  </div>
+
+  <div class="contenedor recorrido" data-recorrido>
+    <div class="pasos" role="tablist" aria-label="Pasos del hilo">
+      <span class="pasos__marca" aria-hidden="true"></span>
+      {
+        hilo.pasos.map((paso) => {
+          const activo = paso.tipo === inicial;
+          return (
+            <button
+              type="button"
+              class="paso"
+              role="tab"
+              id={`pestana-${paso.tipo}`}
+              aria-controls={`panel-${paso.tipo}`}
+              aria-selected={activo ? 'true' : 'false'}
+              tabindex={activo ? 0 : -1}
+              data-tipo={paso.tipo}
+              data-indice={paso.indice}
+              data-estado={paso.piezas.length ? 'lleno' : 'vacio'}
+            >
+              <span class="paso__punto" aria-hidden="true" />
+              <span class="palabra paso__palabra">{paso.palabra}</span>
+              <span class="paso__recuento">{recuento(paso.piezas.length)}</span>
+            </button>
+          );
+        })
+      }
+    </div>
+
+    {
+      hilo.pasos.map((paso) => (
+        <section
+          class="panel"
+          role="tabpanel"
+          id={`panel-${paso.tipo}`}
+          aria-labelledby={`pestana-${paso.tipo}`}
+          tabindex="0"
+          hidden={paso.tipo !== inicial}
+        >
+          {paso.piezas.length ? (
+            <ol class="panel__piezas">
+              {paso.piezas.map((p) => (
+                <li class="item">
+                  <p class="item__fecha">
+                    <time datetime={fechaISO(p.data.fecha)}>{fecha(p.data.fecha)}</time>
+                  </p>
+                  <h2 class="item__titulo">
+                    <a href={`/noticias/${p.id}/`}>{p.data.titulo}</a>
+                  </h2>
+                  <p class="item__esencial">{p.data.esencial}</p>
+                  <p class="item__practica">
+                    <span>En la práctica: </span>
+                    {p.data.practica}
+                  </p>
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <p class="panel__vacio">
+              Todavía no hay piezas en este paso. Cuando llegue {QUE_ES[paso.tipo]} sobre esta cuestión, aparecerá aquí.
+            </p>
+          )}
+        </section>
+      ))
+    }
+  </div>
+</Base>
+
+<script>
+  const EASE = 'cubic-bezier(0.23, 1, 0.32, 1)';
+  const reducido = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  function iniciar(raiz: HTMLElement) {
+    const lista = raiz.querySelector<HTMLElement>('[role="tablist"]')!;
+    const marca = raiz.querySelector<HTMLElement>('.pasos__marca')!;
+    const pestanas = [...raiz.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+    let activa = pestanas.find((p) => p.getAttribute('aria-selected') === 'true') ?? pestanas[0];
+
+    // La marca se coloca sobre el punto de la pestaña activa.
+    const colocar = () => {
+      const punto = activa.querySelector<HTMLElement>('.paso__punto')!;
+      const a = punto.getBoundingClientRect();
+      const b = lista.getBoundingClientRect();
+      marca.style.transform = `translate(${a.left - b.left}px, ${a.top - b.top}px)`;
+    };
+
+    function seleccionar(nueva: HTMLButtonElement, opciones: { foco?: boolean; animar?: boolean } = {}) {
+      const { foco = false, animar = true } = opciones;
+      if (foco) nueva.focus();
+      if (nueva === activa) return;
+      const desde = Number(activa.dataset.indice);
+      const hacia = Number(nueva.dataset.indice);
+      const viejo = document.getElementById(activa.getAttribute('aria-controls')!)!;
+      const nuevo = document.getElementById(nueva.getAttribute('aria-controls')!)!;
+
+      activa.setAttribute('aria-selected', 'false');
+      activa.tabIndex = -1;
+      nueva.setAttribute('aria-selected', 'true');
+      nueva.tabIndex = 0;
+      activa = nueva;
+
+      viejo.hidden = true;
+      nuevo.hidden = false;
+      colocar();
+      history.replaceState(history.state, '', `#${nueva.dataset.tipo}`);
+
+      if (animar && !reducido()) {
+        // El contenido entra en la misma dirección en que se mueve el punto.
+        const signo = hacia > desde ? 1 : -1;
+        nuevo.animate(
+          { opacity: [0, 1], transform: [`translateX(${signo * 40}px)`, 'translateX(0)'] },
+          { duration: 280, easing: EASE },
+        );
+      }
+    }
+
+    pestanas.forEach((p, i) => {
+      p.addEventListener('click', () => seleccionar(p));
+      p.addEventListener('keydown', (e) => {
+        const ir = { ArrowRight: i + 1, ArrowDown: i + 1, ArrowLeft: i - 1, ArrowUp: i - 1, Home: 0, End: pestanas.length - 1 }[
+          e.key
+        ];
+        if (ir === undefined) return;
+        e.preventDefault();
+        seleccionar(pestanas[(ir + pestanas.length) % pestanas.length], { foco: true });
+      });
+    });
+
+    const desdeEnlace = pestanas.find((p) => `#${p.dataset.tipo}` === location.hash);
+    if (desdeEnlace) seleccionar(desdeEnlace, { animar: false });
+
+    // Sin transición en la primera colocación, para que la marca no viaje al cargar.
+    marca.style.transition = 'none';
+    colocar();
+    marca.getBoundingClientRect();
+    marca.style.transition = '';
+    marca.dataset.lista = '';
+
+    new ResizeObserver(() => {
+      marca.style.transition = 'none';
+      colocar();
+      marca.getBoundingClientRect();
+      marca.style.transition = '';
+    }).observe(lista);
+  }
+
+  document.addEventListener('astro:page-load', () => {
+    document.querySelectorAll<HTMLElement>('[data-recorrido]').forEach(iniciar);
+  });
+</script>
+
+<style>
+  .cabeza {
+    padding-top: clamp(24px, 5vw, 72px);
+  }
+
+  .cabeza__materia {
+    font-size: 0.9375rem;
+    font-weight: 500;
+    color: var(--gris);
+  }
+
+  .cabeza__materia a {
+    text-decoration: none;
+  }
+
+  .cabeza__titulo {
+    margin-top: 12px;
+    max-width: 24ch;
+    font-size: clamp(2rem, 1.1rem + 3.4vw, 4.25rem);
+    font-weight: 650;
+    line-height: 1.02;
+    letter-spacing: -0.03em;
+    text-wrap: balance;
+  }
+
+  .recorrido {
+    margin-top: clamp(48px, 7vw, 96px);
+  }
+
+  .pasos {
+    --punto: 16px;
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: clamp(16px, 3vw, 48px);
+  }
+
+  .pasos::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: calc(var(--punto) / 2);
+    height: 1px;
+    background: var(--filete);
+  }
+
+  .pasos__marca {
+    position: absolute;
+    z-index: 1;
+    left: 0;
+    top: 0;
+    width: var(--punto);
+    height: var(--punto);
+    border-radius: 50%;
+    background: var(--azul);
+    opacity: 0;
+    pointer-events: none;
+    transition: transform 320ms var(--ease-in-out);
+  }
+
+  .pasos__marca[data-lista] {
+    opacity: 1;
+  }
+
+  .paso {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    min-width: 0;
+    padding: 0 0 12px;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .paso__punto {
+    display: block;
+    width: var(--punto);
+    height: var(--punto);
+    border-radius: 50%;
+    border: 2px solid var(--tinta);
+    background: var(--papel);
+  }
+
+  .paso[data-estado='vacio'] .paso__punto {
+    border-color: var(--gris-paso);
+  }
+
+  .paso__palabra {
+    margin-top: 14px;
+    font-size: clamp(2.5rem, 1.2rem + 4.4vw, 5.5rem);
+    line-height: 1;
+    color: var(--tinta);
+    transition: color 150ms ease;
+  }
+
+  .paso[data-estado='vacio'] .paso__palabra {
+    color: var(--gris-paso);
+  }
+
+  .paso[aria-selected='true'] .paso__palabra {
+    color: var(--azul);
+  }
+
+  .paso__recuento {
+    margin-top: 4px;
+    font-size: 0.875rem;
+    color: var(--gris);
+  }
+
+  .paso:active .paso__palabra {
+    scale: 0.98;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .paso[aria-selected='false']:hover .paso__palabra {
+      text-decoration: underline;
+      text-decoration-thickness: 1px;
+      text-underline-offset: 0.12em;
+    }
+  }
+
+  .panel {
+    margin-top: clamp(32px, 4vw, 56px);
+  }
+
+  .panel:focus-visible {
+    outline-offset: 8px;
+  }
+
+  .panel__piezas {
+    display: grid;
+  }
+
+  .item {
+    padding-block: 28px;
+    border-top: 1px solid var(--filete);
+  }
+
+  .item__fecha {
+    font-size: 0.875rem;
+    color: var(--gris);
+  }
+
+  .item__titulo {
+    margin-top: 8px;
+    max-width: 34ch;
+    font-size: clamp(1.375rem, 1rem + 1.2vw, 2rem);
+    font-weight: 600;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+  }
+
+  .item__titulo a {
+    text-decoration: none;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .item__titulo a:hover {
+      text-decoration: underline;
+      text-decoration-thickness: 2px;
+      text-decoration-color: var(--azul);
+    }
+  }
+
+  .item__esencial {
+    margin-top: 12px;
+    max-width: 62ch;
+  }
+
+  .item__practica {
+    margin-top: 10px;
+    max-width: 62ch;
+    font-weight: 550;
+  }
+
+  .item__practica span {
+    color: var(--azul);
+  }
+
+  .panel__vacio {
+    max-width: 52ch;
+    padding-top: 28px;
+    border-top: 1px solid var(--filete);
+    color: var(--gris);
+  }
+
+  @media (max-width: 767px) {
+    .pasos {
+      --punto: 12px;
+      gap: 8px;
+    }
+
+    .paso__palabra {
+      font-size: clamp(1.75rem, 8.4vw, 2.5rem);
+      white-space: normal;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .pasos__marca {
+      transition: none;
+    }
+  }
+</style>

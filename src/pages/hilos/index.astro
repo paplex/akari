@@ -1,0 +1,51 @@
+---
+import Base from '../../layouts/Base.astro';
+import FilaHilo from '../../components/FilaHilo.astro';
+import { getHilos } from '../../lib/akari';
+
+const hilos = await getHilos();
+---
+
+<Base titulo="Hilos">
+  <div class="contenedor">
+    <h1 class="palabra gigante">Hilos</h1>
+    <p class="intro">Cada hilo une la norma, los criterios que la interpretan y los análisis que la comentan.</p>
+    {
+      hilos.length ? (
+        <ul class="lista">
+          {hilos.map((h) => (
+            <FilaHilo hilo={h} nivel="h2" />
+          ))}
+        </ul>
+      ) : (
+        <p class="vacio">Todavía no hay hilos abiertos.</p>
+      )
+    }
+  </div>
+</Base>
+
+<style>
+  .gigante {
+    display: block;
+    margin-top: clamp(16px, 3vw, 40px);
+    font-size: clamp(5rem, 22vw, 20rem);
+    line-height: 0.85;
+    color: var(--tinta);
+  }
+
+  .intro {
+    margin-top: clamp(16px, 2vw, 28px);
+    max-width: 52ch;
+    font-size: 1.1875rem;
+    color: var(--gris);
+  }
+
+  .lista {
+    margin-top: clamp(40px, 6vw, 80px);
+  }
+
+  .vacio {
+    margin-top: 40px;
+    color: var(--gris);
+  }
+</style>

@@ -1,0 +1,167 @@
+---
+// Gesto 3: el desarrollo largo se despliega bajo la ficha sin saltos.
+// Sin JavaScript es un <details> normal; con él, la altura se anima y se puede interrumpir.
+---
+
+<div class="contenedor">
+  <details class="desarrollo" data-desarrollo>
+    <summary class="desarrollo__boton">
+      <span>Leer el desarrollo</span>
+      <span class="desarrollo__signo" aria-hidden="true">+</span>
+    </summary>
+    <div class="desarrollo__cuerpo">
+      <div class="desarrollo__texto">
+        <slot />
+      </div>
+    </div>
+  </details>
+</div>
+
+<script>
+  const EASE = 'cubic-bezier(0.23, 1, 0.32, 1)';
+  const reducido = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  function preparar(detalles: HTMLDetailsElement) {
+    if (detalles.dataset.listo) return;
+    detalles.dataset.listo = '';
+    const boton = detalles.querySelector('summary')!;
+    const cuerpo = detalles.querySelector<HTMLElement>('.desarrollo__cuerpo')!;
+    const texto = detalles.querySelector<HTMLElement>('.desarrollo__texto')!;
+    let animacion: Animation | null = null;
+
+    if (detalles.open) detalles.dataset.abierto = '';
+
+    boton.addEventListener('click', (e) => {
+      if (reducido()) {
+        // Sin animación: el comportamiento nativo basta; solo sincronizamos el signo.
+        requestAnimationFrame(() => detalles.toggleAttribute('data-abierto', detalles.open));
+        return;
+      }
+      e.preventDefault();
+      const abrir = !detalles.hasAttribute('data-abierto');
+      // Cerrado, el navegador sigue dando medidas al contenido oculto: se parte de cero.
+      const desde = detalles.open ? cuerpo.getBoundingClientRect().height : 0;
+      animacion?.cancel();
+      detalles.toggleAttribute('data-abierto', abrir);
+
+      if (abrir) {
+        detalles.open = true;
+        const hasta = cuerpo.scrollHeight;
+        animacion = cuerpo.animate({ height: [`${desde}px`, `${hasta}px`] }, { duration: 280, easing: EASE });
+        texto.animate(
+          { opacity: [0, 1], transform: ['translateY(-8px)', 'translateY(0)'] },
+          { duration: 280, easing: EASE },
+        );
+      } else {
+        animacion = cuerpo.animate(
+          { height: [`${desde}px`, '0px'] },
+          { duration: 200, easing: EASE, fill: 'forwards' },
+        );
+        const fundido = texto.animate({ opacity: [1, 0] }, { duration: 140, easing: 'ease-out', fill: 'forwards' });
+        animacion.addEventListener('cancel', () => fundido.cancel(), { once: true });
+      }
+
+      const actual = animacion;
+      actual.finished.then(
+        () => {
+          if (animacion !== actual) return;
+          if (!abrir) detalles.open = false;
+          texto.getAnimations().forEach((a) => a.cancel());
+          actual.cancel();
+          animacion = null;
+        },
+        () => {},
+      );
+    });
+  }
+
+  document.addEventListener('astro:page-load', () => {
+    document.querySelectorAll<HTMLDetailsElement>('[data-desarrollo]').forEach(preparar);
+  });
+</script>
+
+<style>
+  .desarrollo {
+    margin-top: clamp(40px, 5vw, 64px);
+    border-top: 1px solid var(--filete);
+  }
+
+  .desarrollo__boton {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    width: 100%;
+    padding: 20px 0;
+    font-size: 1.125rem;
+    font-weight: 600;
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .desarrollo__boton::-webkit-details-marker {
+    display: none;
+  }
+
+  .desarrollo__signo {
+    display: inline-grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    font-size: 2.25rem;
+    font-weight: 300;
+    line-height: 1;
+    color: var(--azul);
+    transition: transform 200ms cubic-bezier(0.23, 1, 0.32, 1);
+  }
+
+  .desarrollo[data-abierto] .desarrollo__signo {
+    transform: rotate(45deg);
+  }
+
+  .desarrollo__boton:active .desarrollo__signo {
+    scale: 0.92;
+  }
+
+  .desarrollo__cuerpo {
+    overflow: hidden;
+  }
+
+  .desarrollo__texto {
+    max-width: 68ch;
+    padding-bottom: 24px;
+  }
+
+  .desarrollo__texto :global(p),
+  .desarrollo__texto :global(ul),
+  .desarrollo__texto :global(ol) {
+    margin-top: 1em;
+    line-height: 1.65;
+  }
+
+  .desarrollo__texto :global(p:first-child) {
+    margin-top: 0;
+  }
+
+  .desarrollo__texto :global(ul) {
+    padding-left: 1.2em;
+    list-style: disc;
+  }
+
+  .desarrollo__texto :global(h2),
+  .desarrollo__texto :global(h3) {
+    margin-top: 1.8em;
+    font-size: 1.3125rem;
+    font-weight: 650;
+    letter-spacing: -0.015em;
+    line-height: 1.25;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .desarrollo__signo {
+      transition: none;
+    }
+  }
+</style>

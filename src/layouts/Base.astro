@@ -1,0 +1,78 @@
+---
+import { ClientRouter } from 'astro:transitions';
+import '@fontsource/instrument-serif/latin-400-italic.css';
+import '@fontsource-variable/bricolage-grotesque/opsz.css';
+import '../styles/global.css';
+import Cabecera from '../components/Cabecera.astro';
+import { contarPendientes } from '../lib/akari';
+
+interface Props {
+  titulo?: string;
+  descripcion?: string;
+}
+
+const { titulo, descripcion = 'Noticias fiscales, financieras, jurídicas y laborales del despacho.' } = Astro.props;
+const tituloPagina = titulo ? `${titulo} · Akari` : 'Akari';
+const pendientes = await contarPendientes();
+---
+
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="description" content={descripcion} />
+    <meta name="theme-color" content="#ffffff" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>{tituloPagina}</title>
+    <ClientRouter />
+  </head>
+  <body>
+    <a class="saltar" href="#contenido">Saltar al contenido</a>
+    <Cabecera pendientes={pendientes} />
+    <main id="contenido" tabindex="-1">
+      <slot />
+    </main>
+    <footer class="pie">
+      <div class="contenedor pie__fila">
+        <span>Akari</span>
+        <span>Uso interno del despacho</span>
+      </div>
+    </footer>
+
+    <script>
+      // Gesto 2 entre páginas: al saltar a una pieza de otro paso del mismo hilo,
+      // el contenido entra por el lado hacia el que se avanza. Astro deja la dirección
+      // en <html data-astro-transition> mientras dura la transición.
+      document.addEventListener('astro:before-preparation', (e) => {
+        const enlace = e.sourceElement instanceof Element ? e.sourceElement.closest<HTMLElement>('a[data-paso]') : null;
+        const actual = document.querySelector<HTMLElement>('[data-paso-actual]');
+        if (!enlace || !actual) return;
+        const desde = Number(actual.dataset.pasoActual);
+        const hacia = Number(enlace.dataset.paso);
+        if (hacia !== desde) e.direction = hacia > desde ? 'paso-adelante' : 'paso-atras';
+      });
+    </script>
+  </body>
+</html>
+
+<style>
+  main:focus {
+    outline: none;
+  }
+
+  .pie {
+    margin-top: clamp(64px, 10vw, 128px);
+    border-top: 1px solid var(--filete);
+    font-size: 0.875rem;
+    color: var(--gris);
+  }
+
+  .pie__fila {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    padding-block: 24px;
+  }
+</style>

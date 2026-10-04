@@ -1,0 +1,211 @@
+/*
+  Akari. Boceto C: la letra es la imagen.
+  Un solo tema (claro, por decisión de diseño), un solo acento, esquinas rectas.
+*/
+
+:root {
+  --tinta: #0d0d12;
+  --papel: #ffffff;
+  --azul: #2b3cff;
+  --azul-claro: #9aa5ff;
+  --gris: #5f5f6c;          /* texto secundario: 6.3:1 sobre blanco */
+  --gris-paso: #8a8a96;     /* pasos sin piezas, solo en tamaños grandes: 3.4:1 */
+  --filete: #e3e3ea;
+  --banda-texto: #b9b9c6;   /* texto secundario sobre negro: 9.6:1 */
+  --banda-apagado: #6e6e7c; /* pasos vacíos sobre negro, tamaños grandes: 3.7:1 */
+  --banda-linea: #34343f;
+
+  --serif: 'Instrument Serif', 'Iowan Old Style', Georgia, serif;
+  --sans: 'Bricolage Grotesque Variable', ui-sans-serif, system-ui, sans-serif;
+
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+
+  --margen: clamp(16px, 4vw, 56px);
+  --ancho: 1440px;
+
+  color-scheme: light;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--papel);
+  color: var(--tinta);
+  font-family: var(--sans);
+  font-optical-sizing: auto;
+  font-size: 1.0625rem;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+main {
+  flex: 1;
+}
+
+h1,
+h2,
+h3,
+p,
+ul,
+ol {
+  margin: 0;
+}
+
+ul,
+ol {
+  padding: 0;
+  list-style: none;
+}
+
+a {
+  color: inherit;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.18em;
+}
+
+:focus-visible {
+  outline: 3px solid var(--azul);
+  outline-offset: 3px;
+}
+
+.banda :focus-visible {
+  outline-color: var(--azul-claro);
+}
+
+::selection {
+  background: var(--azul);
+  color: var(--papel);
+}
+
+.contenedor {
+  width: 100%;
+  max-width: var(--ancho);
+  margin-inline: auto;
+  padding-inline: var(--margen);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.saltar {
+  position: absolute;
+  left: var(--margen);
+  top: 8px;
+  z-index: 10;
+  padding: 8px 12px;
+  background: var(--tinta);
+  color: var(--papel);
+  transform: translateY(-200%);
+}
+
+.saltar:focus-visible {
+  transform: none;
+}
+
+/* La palabra en cursiva. Ancho propio para que la transición la escale sin deformarla. */
+.palabra {
+  display: inline-block;
+  font-family: var(--serif);
+  font-style: italic;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  line-height: 0.9;
+  white-space: nowrap;
+  color: var(--azul);
+  padding-inline-end: 0.06em; /* la cursiva sobresale por la derecha */
+}
+
+/* ---------- Transiciones de vista ---------- */
+
+::view-transition-group(*) {
+  animation-duration: 300ms;
+  animation-timing-function: var(--ease-in-out);
+}
+
+::view-transition-old(*),
+::view-transition-new(*) {
+  animation-duration: 180ms;
+  animation-timing-function: var(--ease-out);
+}
+
+/* La cabecera no se mueve entre páginas. */
+::view-transition-group(cabecera),
+::view-transition-old(cabecera),
+::view-transition-new(cabecera) {
+  animation: none;
+}
+
+/* Gesto 1: la palabra viaja. La vieja (más pequeña, pixelada al crecer) se va enseguida. */
+::view-transition-old(*.palabra) {
+  animation-duration: 90ms;
+}
+::view-transition-new(*.palabra) {
+  animation-duration: 160ms;
+}
+
+/* Gesto 2 entre piezas del mismo hilo: el contenido entra desde el lado del paso. */
+@keyframes entra-derecha {
+  from { transform: translateX(48px); opacity: 0; }
+}
+@keyframes entra-izquierda {
+  from { transform: translateX(-48px); opacity: 0; }
+}
+@keyframes sale-izquierda {
+  to { transform: translateX(-48px); opacity: 0; }
+}
+@keyframes sale-derecha {
+  to { transform: translateX(48px); opacity: 0; }
+}
+
+html[data-astro-transition='paso-adelante']::view-transition-old(root),
+html[data-astro-transition='paso-adelante']::view-transition-old(*.pieza) {
+  animation: sale-izquierda 160ms var(--ease-out) both;
+}
+html[data-astro-transition='paso-adelante']::view-transition-new(root),
+html[data-astro-transition='paso-adelante']::view-transition-new(*.pieza) {
+  animation: entra-derecha 260ms var(--ease-out) both;
+}
+html[data-astro-transition='paso-atras']::view-transition-old(root),
+html[data-astro-transition='paso-atras']::view-transition-old(*.pieza) {
+  animation: sale-derecha 160ms var(--ease-out) both;
+}
+html[data-astro-transition='paso-atras']::view-transition-new(root),
+html[data-astro-transition='paso-atras']::view-transition-new(*.pieza) {
+  animation: entra-izquierda 260ms var(--ease-out) both;
+}
+/* En ese gesto las palabras no viajan: cada pieza tiene la suya y entra con su página. */
+html[data-astro-transition^='paso-']::view-transition-group(*.pieza) {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}

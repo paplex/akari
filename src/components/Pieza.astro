@@ -1,0 +1,152 @@
+---
+import Ficha from './Ficha.astro';
+import { PALABRA, MATERIA, fecha, fechaISO, vtPalabra, vtTitular, type Noticia } from '../lib/akari';
+
+interface Props {
+  noticia: Noticia;
+  /** En portada el titular enlaza a la pieza completa. */
+  enlazar?: boolean;
+}
+
+const { noticia, enlazar = false } = Astro.props;
+const { data } = noticia;
+const href = `/noticias/${noticia.id}/`;
+---
+
+<article class="pieza">
+  <div class="contenedor pieza__cabeza" data-tipo={data.tipo}>
+    <p class="pieza__tipo">
+      <span class="sr-only">Tipo de noticia: </span>
+      <span
+        class="palabra pieza__palabra"
+        data-tipo={data.tipo}
+        style={`view-transition-name: ${vtPalabra(noticia)}; view-transition-class: palabra pieza`}
+      >
+        {PALABRA[data.tipo]}
+      </span>
+    </p>
+    <div class="pieza__titular" style={`view-transition-name: ${vtTitular(noticia)}; view-transition-class: pieza`}>
+      <p class="pieza__meta">
+        <a href={`/materia/${data.materia}/`}>{MATERIA[data.materia]}</a>
+        <span aria-hidden="true"> · </span>
+        <time datetime={fechaISO(data.fecha)}>{fecha(data.fecha)}</time>
+      </p>
+      <h1 class="pieza__h1">
+        {enlazar ? <a href={href}>{data.titulo}</a> : data.titulo}
+      </h1>
+      <p class="pieza__esencial">{data.esencial}</p>
+    </div>
+  </div>
+
+  <div class="contenedor">
+    <Ficha noticia={noticia} />
+  </div>
+
+  <slot />
+</article>
+
+<style>
+  .pieza__cabeza {
+    container-type: inline-size;
+    padding-top: clamp(16px, 3vw, 40px);
+  }
+
+  .pieza__tipo {
+    line-height: 0;
+  }
+
+  /*
+    La palabra ocupa casi todo el ancho. Factores medidos sobre la tinta real de
+    Instrument Serif cursiva (ancho de tinta a 100px: Cambia 282, Se aclara 329,
+    A fondo 276) para que las tres lleguen al 98 % del ancho y alineen a la izquierda.
+  */
+  .pieza__cabeza {
+    --k: 0.33;
+    --sangria: 0em;
+  }
+  .pieza__cabeza[data-tipo='cambia'] {
+    --k: 0.362;
+    --sangria: -0.05em;
+  }
+  .pieza__cabeza[data-tipo='se-aclara'] {
+    --k: 0.31;
+    --sangria: 0em;
+  }
+  .pieza__cabeza[data-tipo='a-fondo'] {
+    --k: 0.37;
+    --sangria: 0.08em;
+  }
+
+  .pieza__palabra {
+    font-size: calc(var(--k) * 100cqi);
+    line-height: 0.82;
+    margin-inline-start: var(--sangria);
+  }
+
+  /*
+    El bloque del titular se recorta sobre la parte baja de la palabra, a la derecha:
+    tapa algo más de un tercio del ojo de las minúsculas.
+  */
+  .pieza__titular {
+    position: relative;
+    width: min(100%, 64%);
+    margin-inline-start: auto;
+    margin-top: calc(var(--k) * -24cqi);
+    padding: clamp(18px, 2.4cqi, 36px) 0 0 clamp(18px, 2.6cqi, 44px);
+    background: var(--papel);
+  }
+
+  .pieza__meta {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--gris);
+  }
+
+  .pieza__meta a {
+    color: var(--tinta);
+    text-decoration: none;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .pieza__meta a:hover {
+      text-decoration: underline;
+    }
+  }
+
+  .pieza__h1 {
+    margin-top: 12px;
+    font-size: clamp(1.75rem, 1rem + 2.4vw, 3.25rem);
+    font-weight: 650;
+    line-height: 1.04;
+    letter-spacing: -0.025em;
+    text-wrap: balance;
+  }
+
+  .pieza__h1 a {
+    text-decoration: none;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .pieza__h1 a:hover {
+      text-decoration: underline;
+      text-decoration-thickness: 2px;
+      text-decoration-color: var(--azul);
+    }
+  }
+
+  .pieza__esencial {
+    margin-top: 20px;
+    max-width: 56ch;
+    font-size: clamp(1.0625rem, 1rem + 0.35vw, 1.25rem);
+    line-height: 1.5;
+    text-wrap: pretty;
+  }
+
+  @media (max-width: 767px) {
+    .pieza__titular {
+      width: 100%;
+      margin-top: calc(var(--k) * -14cqi);
+      padding-left: 9%;
+    }
+  }
+</style>

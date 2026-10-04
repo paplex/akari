@@ -1,0 +1,120 @@
+---
+import { MATERIAS, MATERIA } from '../lib/akari';
+
+interface Props {
+  pendientes: number;
+}
+
+const { pendientes } = Astro.props;
+const ruta = Astro.url.pathname.replace(/\/$/, '') || '/';
+const enlaces = [
+  ...MATERIAS.map((m) => ({ href: `/materia/${m}/`, texto: MATERIA[m] })),
+  { href: '/hilos/', texto: 'Hilos' },
+];
+const activo = (href: string) => {
+  const base = href.replace(/\/$/, '');
+  return ruta === base || ruta.startsWith(`${base}/`);
+};
+const aviso = pendientes === 1 ? '1 pieza pendiente de tu revisión' : `${pendientes} piezas pendientes de tu revisión`;
+---
+
+<header class="cabecera" style="view-transition-name: cabecera">
+  <div class="contenedor cabecera__fila">
+    <a class="marca" href="/" aria-current={ruta === '/' ? 'page' : undefined}>Akari</a>
+    <nav aria-label="Secciones">
+      <ul class="nav">
+        {
+          enlaces.map((e) => (
+            <li>
+              <a href={e.href} aria-current={activo(e.href) ? 'page' : undefined}>
+                {e.texto}
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+    </nav>
+  </div>
+  {
+    pendientes > 0 && (
+      <div class="contenedor">
+        <p class="aviso" role="status">{aviso}</p>
+      </div>
+    )
+  }
+</header>
+
+<style>
+  .cabecera {
+    position: relative;
+    z-index: 2;
+    background: var(--papel);
+  }
+
+  .cabecera__fila {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    min-height: 68px;
+  }
+
+  .marca {
+    font-weight: 700;
+    font-size: 1.375rem;
+    letter-spacing: -0.03em;
+    text-decoration: none;
+  }
+
+  .nav {
+    display: flex;
+    gap: clamp(14px, 2.2vw, 32px);
+    font-size: 0.9375rem;
+    font-weight: 500;
+  }
+
+  .nav a {
+    display: inline-block;
+    padding-block: 8px;
+    text-decoration: none;
+    color: var(--gris);
+    transition: color 150ms ease;
+  }
+
+  .nav a[aria-current='page'] {
+    color: var(--tinta);
+    text-decoration: underline;
+    text-decoration-color: var(--azul);
+    text-decoration-thickness: 2px;
+    text-underline-offset: 0.45em;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .nav a:hover {
+      color: var(--tinta);
+    }
+  }
+
+  .aviso {
+    padding: 10px 0 12px;
+    border-top: 1px solid var(--filete);
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--azul);
+  }
+
+  @media (max-width: 640px) {
+    .cabecera__fila {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0;
+      padding-top: 12px;
+    }
+
+    .nav {
+      flex-wrap: wrap;
+      column-gap: 18px;
+      row-gap: 0;
+    }
+  }
+</style>

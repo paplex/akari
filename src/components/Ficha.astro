@@ -1,0 +1,85 @@
+---
+import { fecha, fechaISO, type Noticia } from '../lib/akari';
+
+interface Props {
+  noticia: Noticia;
+}
+
+const { data } = Astro.props.noticia;
+const publicacion = data.estado === 'auto' ? 'Publicada automáticamente' : 'Revisada por el equipo';
+---
+
+<dl class="ficha">
+  <div class="ficha__col">
+    <dt>A quién afecta</dt>
+    <dd>{data.afecta}</dd>
+  </div>
+  <div class="ficha__col ficha__col--practica">
+    <dt>Qué cambia en la práctica</dt>
+    <dd>{data.practica}</dd>
+  </div>
+  <div class="ficha__col">
+    <dt>Fuente</dt>
+    <dd>
+      <a href={data.fuente.enlace} rel="noopener noreferrer" target="_blank">
+        {data.fuente.nombre}<span class="sr-only"> (se abre en otra pestaña)</span>
+      </a>
+      <span class="ficha__dato"><time datetime={fechaISO(data.fecha)}>{fecha(data.fecha)}</time></span>
+      <span class="ficha__dato">{publicacion}</span>
+    </dd>
+  </div>
+</dl>
+
+<style>
+  .ficha {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: clamp(24px, 3vw, 48px);
+    margin: clamp(48px, 6vw, 88px) 0 0;
+  }
+
+  .ficha__col {
+    padding-top: 16px;
+    border-top: 5px solid var(--tinta);
+  }
+
+  .ficha__col--practica {
+    border-top-color: var(--azul);
+  }
+
+  dt {
+    font-size: 0.875rem;
+    font-weight: 650;
+  }
+
+  .ficha__col--practica dt {
+    color: var(--azul);
+  }
+
+  dd {
+    margin: 10px 0 0;
+    max-width: 38ch;
+    font-size: 1.0625rem;
+    line-height: 1.5;
+    text-wrap: pretty;
+  }
+
+  .ficha__col--practica dd {
+    font-size: 1.1875rem;
+    font-weight: 550;
+    line-height: 1.4;
+  }
+
+  .ficha__dato {
+    display: block;
+    margin-top: 4px;
+    font-size: 0.9375rem;
+    color: var(--gris);
+  }
+
+  @media (max-width: 767px) {
+    .ficha {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

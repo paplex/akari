@@ -1,0 +1,141 @@
+---
+import Base from '../../layouts/Base.astro';
+import { getPublicadas, MATERIAS, MATERIA, PALABRA, fecha, fechaISO, vtPalabra, type Materia } from '../../lib/akari';
+
+export function getStaticPaths() {
+  return MATERIAS.map((materia) => ({ params: { materia } }));
+}
+
+const materia = Astro.params.materia as Materia;
+const nombre = MATERIA[materia];
+const noticias = (await getPublicadas()).filter((n) => n.data.materia === materia);
+---
+
+<Base titulo={nombre}>
+  <div class="contenedor">
+    <h1 class="palabra gigante">{nombre}</h1>
+
+    {
+      noticias.length ? (
+        <ol class="lista">
+          {noticias.map((n) => (
+            <li class="fila">
+              <p class="fila__tipo">
+                <span class="sr-only">Tipo de noticia: </span>
+                <span
+                  class="palabra fila__palabra"
+                  style={`view-transition-name: ${vtPalabra(n)}; view-transition-class: palabra`}
+                >
+                  {PALABRA[n.data.tipo]}
+                </span>
+              </p>
+              <div class="fila__texto">
+                <h2 class="fila__titulo">
+                  <a href={`/noticias/${n.id}/`}>{n.data.titulo}</a>
+                </h2>
+                <p class="fila__esencial">{n.data.esencial}</p>
+              </div>
+              <p class="fila__fecha">
+                <time datetime={fechaISO(n.data.fecha)}>{fecha(n.data.fecha)}</time>
+              </p>
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <p class="vacio">
+          Todavía no hay noticias de {nombre.toLowerCase()}. Las nuevas piezas de esta materia aparecerán aquí.
+        </p>
+      )
+    }
+  </div>
+</Base>
+
+<style>
+  .gigante {
+    display: block;
+    margin-top: clamp(16px, 3vw, 40px);
+    font-size: clamp(4.5rem, 19vw, 17rem);
+    line-height: 0.85;
+    color: var(--tinta);
+  }
+
+  .lista {
+    margin-top: clamp(40px, 6vw, 80px);
+  }
+
+  .fila {
+    display: grid;
+    grid-template-columns: minmax(9rem, 1.1fr) minmax(0, 3.4fr) minmax(8rem, 0.9fr);
+    column-gap: clamp(20px, 3vw, 48px);
+    align-items: baseline;
+    padding-block: clamp(24px, 3vw, 40px);
+    border-top: 1px solid var(--filete);
+  }
+
+  .fila__palabra {
+    font-size: clamp(2rem, 1.3rem + 2vw, 3.5rem);
+    line-height: 1;
+  }
+
+  .fila__titulo {
+    max-width: 34ch;
+    font-size: clamp(1.25rem, 1rem + 0.9vw, 1.75rem);
+    font-weight: 600;
+    line-height: 1.18;
+    letter-spacing: -0.018em;
+    text-wrap: balance;
+  }
+
+  .fila__titulo a {
+    text-decoration: none;
+  }
+
+  /* Toda la fila es pulsable a través del enlace del titular. */
+  .fila {
+    position: relative;
+  }
+  .fila__titulo a::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .fila:hover .fila__titulo a {
+      text-decoration: underline;
+      text-decoration-thickness: 2px;
+      text-decoration-color: var(--azul);
+    }
+  }
+
+  .fila__esencial {
+    margin-top: 10px;
+    max-width: 62ch;
+    color: var(--gris);
+  }
+
+  .fila__fecha {
+    font-size: 0.875rem;
+    color: var(--gris);
+    text-align: right;
+  }
+
+  .vacio {
+    margin-top: clamp(40px, 6vw, 80px);
+    padding-top: 28px;
+    border-top: 1px solid var(--filete);
+    max-width: 52ch;
+    color: var(--gris);
+  }
+
+  @media (max-width: 767px) {
+    .fila {
+      grid-template-columns: 1fr;
+      row-gap: 8px;
+    }
+
+    .fila__fecha {
+      text-align: left;
+    }
+  }
+</style>

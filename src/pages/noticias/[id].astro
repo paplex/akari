@@ -1,0 +1,35 @@
+---
+import { render } from 'astro:content';
+import Base from '../../layouts/Base.astro';
+import Pieza from '../../components/Pieza.astro';
+import Desarrollo from '../../components/Desarrollo.astro';
+import BandaHilo from '../../components/BandaHilo.astro';
+import { getPublicadas, getHilo, type Noticia } from '../../lib/akari';
+
+export async function getStaticPaths() {
+  const publicadas = await getPublicadas();
+  return publicadas.map((noticia) => ({ params: { id: noticia.id }, props: { noticia } }));
+}
+
+interface Props {
+  noticia: Noticia;
+}
+
+const { noticia } = Astro.props;
+const { Content } = await render(noticia);
+const tieneDesarrollo = Boolean(noticia.body?.trim());
+const hilo = noticia.data.hilo ? await getHilo(noticia.data.hilo.id) : null;
+---
+
+<Base titulo={noticia.data.titulo} descripcion={noticia.data.esencial}>
+  <Pieza noticia={noticia}>
+    {
+      tieneDesarrollo && (
+        <Desarrollo>
+          <Content />
+        </Desarrollo>
+      )
+    }
+  </Pieza>
+  {hilo && <BandaHilo hilo={hilo} actual={noticia} />}
+</Base>

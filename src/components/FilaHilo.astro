@@ -1,0 +1,121 @@
+---
+import { MATERIA, vtPalabra, type HiloConPasos } from '../lib/akari';
+
+interface Props {
+  hilo: HiloConPasos;
+  nivel?: 'h2' | 'h3';
+}
+
+const { hilo, nivel = 'h3' } = Astro.props;
+const Titulo = nivel;
+const href = `/hilos/${hilo.hilo.id}/`;
+---
+
+<li class="fila">
+  <p class="fila__materia">{MATERIA[hilo.hilo.data.materia]}</p>
+  <Titulo class="fila__titulo"><a href={href}>{hilo.hilo.data.titulo}</a></Titulo>
+  <ul class="fila__pasos" aria-label="Pasos del hilo">
+    {
+      hilo.pasos.map((paso) => {
+        const ultima = paso.piezas.at(-1);
+        return (
+          <li>
+            {ultima ? (
+              <a
+                class="palabra fila__palabra"
+                href={`/noticias/${ultima.id}/`}
+                aria-label={`${paso.palabra}: ${ultima.data.titulo}`}
+                style={`view-transition-name: ${vtPalabra(ultima)}; view-transition-class: palabra`}
+              >
+                {paso.palabra}
+              </a>
+            ) : (
+              <span class="palabra fila__palabra fila__palabra--vacia">
+                {paso.palabra}
+                <span class="sr-only">, todavía sin piezas</span>
+              </span>
+            )}
+          </li>
+        );
+      })
+    }
+  </ul>
+</li>
+
+<style>
+  .fila {
+    display: grid;
+    grid-template-columns: minmax(8rem, 0.9fr) minmax(0, 3fr) auto;
+    grid-template-areas: 'materia titulo pasos';
+    align-items: baseline;
+    column-gap: clamp(20px, 3vw, 48px);
+    padding-block: clamp(24px, 3vw, 40px);
+    border-top: 1px solid var(--filete);
+  }
+
+  .fila__materia {
+    grid-area: materia;
+    font-size: 0.9375rem;
+    font-weight: 500;
+    color: var(--gris);
+  }
+
+  .fila__titulo {
+    grid-area: titulo;
+    max-width: 30ch;
+    font-size: clamp(1.375rem, 1rem + 1.3vw, 2.25rem);
+    font-weight: 600;
+    line-height: 1.12;
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+  }
+
+  .fila__titulo a {
+    text-decoration: none;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .fila__titulo a:hover {
+      text-decoration: underline;
+      text-decoration-thickness: 2px;
+      text-decoration-color: var(--azul);
+    }
+  }
+
+  .fila__pasos {
+    grid-area: pasos;
+    display: flex;
+    gap: clamp(14px, 1.6vw, 24px);
+  }
+
+  .fila__palabra {
+    font-size: clamp(1.75rem, 1.2rem + 1.4vw, 2.75rem);
+    line-height: 1.1;
+    text-decoration: none;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    a.fila__palabra:hover {
+      text-decoration: underline;
+      text-decoration-thickness: 1px;
+      text-underline-offset: 0.12em;
+    }
+  }
+
+  .fila__palabra--vacia {
+    color: var(--gris-paso);
+  }
+
+  @media (max-width: 1023px) {
+    .fila {
+      grid-template-columns: 1fr;
+      grid-template-areas: 'materia' 'titulo' 'pasos';
+      row-gap: 10px;
+    }
+
+    .fila__pasos {
+      flex-wrap: wrap;
+      margin-top: 6px;
+    }
+  }
+</style>
