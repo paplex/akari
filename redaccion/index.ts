@@ -24,7 +24,7 @@ import {
   slug,
   type Resultado,
 } from './archivo';
-import { consumoVacio, type Consumo } from './claude';
+import { acumular, consumoVacio, esErrorDeServicio, type Consumo } from './claude';
 import { interpretarCorreo, leerCorreo, type Correo } from './correo';
 import { etiquetarYArchivar, gmailConfigurado, leerBandeja, ETIQUETA } from './gmail';
 import type { Dictamen, EntradaIndice, Indice, Pieza, Revision, RevisionDiseno } from './esquemas';
@@ -76,6 +76,9 @@ function informe(c: Correo, resultado: string, consumo: Consumo, indice: Indice 
     `- Fecha del correo: ${c.fecha.toISOString().slice(0, 10)}`,
     `- Resultado del correo: **${resultado}**`,
     `- Consumo: ${consumo.entrada} tokens de entrada, ${consumo.salida} de salida, ${consumo.busquedas} búsquedas web, ${coste(consumo)}`,
+    ...Object.entries(consumo.pasos)
+      .sort((a, b) => b[1] - a[1])
+      .map(([paso, d]) => `  - ${paso}: ${d.toFixed(2)} USD`),
   ];
   if (error) partes.push(`- Error: ${error}`);
   if (indice) {
@@ -166,7 +169,9 @@ async function procesarNoticia(c: Correo, t: Traza, unica: boolean, consumo: Con
  * El resultado del correo resume el de sus noticias: "pendiente" si alguna necesita
  * revisión o falló, "auto" si todas salieron solas, "descartado" si no había nada.
  */
-async function procesar(c: Correo): Promise<{ resultado: Resultado; piezas: string[]; detalle: string; consumo: Consumo }> {
+async function procesar(
+  c: Correo,
+): Promise<{ resultado: Resultado; piezas: string[]; detalle: string; consumo: Consumo; fatal?: boolean }> {
   const consumo = consumoVacio();
   const nombreInforme = `${c.fecha.toISOString().slice(0, 10)}-${slug(c.asunto, 50) || 'correo'}`;
   const trazas: Traza[] = [];
@@ -178,12 +183,13 @@ async function procesar(c: Correo): Promise<{ resultado: Resultado; piezas: stri
   } catch (e) {
     const motivo = e instanceof Error ? e.message : String(e);
     await guardarInforme(nombreInforme, informe(c, 'error', consumo, null, trazas, motivo));
-    return { resultado: 'error', piezas: [], detalle: motivo, consumo };
+    return { resultado: 'error', piezas: [], detalle: motivo, consumo, fatal: esErrorDeServicio(e) };
   }
 
   const elegidas = indice.piezas.filter((e) => e.es_noticia);
   const sobrantes = elegidas.slice(MAX_PIEZAS);
   const fallos: string[] = [];
+  let parada: string | null = null;
 
   for (const entrada of elegidas.slice(0, MAX_PIEZAS)) {
     const t: Traza = { entrada };
@@ -194,10 +200,24 @@ async function procesar(c: Correo): Promise<{ resultado: Resultado; piezas: stri
       console.log(`      ${r}${t.pieza ? ` → ${t.pieza}` : ''}`);
     } catch (e) {
       const motivo = e instanceof Error ? e.message : String(e);
+      if (esErrorDeServicio(e)) {
+        // Sin crédito, sin clave o con el servicio caído no tiene sentido seguir con las demás noticias.
+        t.resultado = `error de la API: ${motivo}`;
+        parada = motivo;
+        console.log(`      error de la API, se para: ${motivo}`);
+        break;
+      }
       t.resultado = `error: ${motivo}`;
       fallos.push(`${entrada.titulo}: ${motivo}`);
       console.log(`      error: ${motivo}`);
     }
+  }
+
+  if (parada) {
+    // El correo se queda en la bandeja y sin registrar: la próxima pasada lo retoma.
+    // Las piezas ya escritas aparecen en el contexto y el índice no las repetirá.
+    await guardarInforme(nombreInforme, informe(c, 'error', consumo, indice, trazas, parada));
+    return { resultado: 'error', piezas: trazas.flatMap((t) => (t.pieza ? [t.pieza] : [])), detalle: parada, consumo, fatal: true };
   }
 
   const estados = trazas.map((t) => t.resultado);
@@ -289,7 +309,7 @@ async function main() {
       }
       console.log(`→ ${etiqueta}: ${correo.asunto}`);
       const r = await procesar(correo);
-      for (const k of ['entrada', 'salida', 'busquedas', 'dolares'] as const) total[k] += r.consumo[k];
+      acumular(total, r.consumo);
       cuenta[r.resultado] = (cuenta[r.resultado] ?? 0) + 1;
       console.log(`  ${r.resultado}${r.piezas.length ? ` → ${r.piezas.join(', ')}` : ''}. ${r.detalle} (${coste(r.consumo)})`);
 
@@ -305,6 +325,10 @@ async function main() {
         await guardarRegistro(registro);
         if (uid !== undefined) paraEtiquetar.push({ uid, resultado: r.resultado });
       }
+      if (r.fatal) {
+        console.error('\nSe para la pasada por un error de la API. El correo se queda en la bandeja para reintentar.');
+        break;
+      }
     }
   } finally {
     if (paraEtiquetar.length) {
@@ -314,7 +338,7 @@ async function main() {
   }
 
   const resumen = Object.entries(cuenta).map(([k, v]) => `${v} ${k}`).join(', ');
-  console.log(`\nHecho:${resumen || 'nada nuevo'}. Coste total: ${coste(total)}. Informes en redaccion/informes/.`);
+  console.log(`\nHecho: ${resumen || 'nada nuevo'}. Coste total: ${coste(total)}. Informes en redaccion/informes/.`);
 }
 
 main().catch((e) => {
