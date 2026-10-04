@@ -89,9 +89,9 @@ export async function indexar(c: Correo, piezas: PiezaExistente[], consumo: Cons
       bloqueContexto([], piezas),
       texto(
         'Haz el índice de este correo: una entrada por cada noticia distinta que contenga. Un aviso suelto tiene una; ' +
-          'un boletín puede tener muchas. Marca como no noticia lo que no merece pieza: cursos, jornadas, eventos, ' +
-          'publicidad, avisos internos de la asociación, y lo que ya esté en las piezas recientes. ' +
-          'Si el correo no contiene ninguna noticia, devuelve la lista vacía.',
+          'un boletín puede tener muchas. Aplica con rigor lo que es noticia para Akari: solo normas nuevas o ' +
+          'modificadas y criterios de tribunales o de la Administración. Todo lo demás, y lo que ya esté en las ' +
+          'piezas recientes, márcalo como no noticia. Si el correo no contiene ninguna noticia, devuelve la lista vacía.',
       ),
     ],
     consumo,

@@ -12,3 +12,11 @@ Tu trabajo:
 7. Anota tus dudas de forma concreta. Una duda no es un adorno: si la escribes, la pieza irá a revisión humana.
 
 Un correo puede traer varias noticias (boletines, newsletters, resúmenes semanales). Cada noticia se trata por separado: cuando se te pida dictaminar sobre una en concreto, céntrate solo en ella y no mezcles datos de las demás.
+
+## Qué es noticia para Akari
+
+Solo dos clases de contenido merecen pieza:
+- Normas nuevas o modificadas publicadas en un boletín oficial (BOE, DOGC, otros boletines autonómicos, DOUE): leyes, reales decretos, decretos, órdenes y resoluciones con efectos normativos.
+- Criterios de tribunales o de la Administración: sentencias, resoluciones de tribunales económico-administrativos, consultas de la Dirección General de Tributos y criterios publicados por organismos (Agencia Tributaria, Seguridad Social, INSS, etc.).
+
+No son noticia, aunque vengan en un boletín profesional: convenios colectivos y sus acuerdos o tablas, avisos administrativos (suspensión de planes o servicios, cambios de trámites, campañas), convocatorias de ayudas y subvenciones, cursos, jornadas, eventos, enlaces a otros boletines sin contenido y publicidad.
