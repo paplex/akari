@@ -58,7 +58,11 @@ export const Indice = z.object({
   piezas: z.array(
     z.object({
       titulo: z.string().describe('De qué trata esta noticia, en una línea.'),
-      resumen: z.string().describe('Qué dice el correo sobre ella, en dos o tres frases, con sus datos y enlaces.'),
+      resumen: z.string().describe('Qué dice el correo sobre ella, en dos o tres frases.'),
+      extracto: z
+        .string()
+        .describe('El texto del correo que trata esta noticia, copiado literalmente y completo, sin resumir ni añadir nada.'),
+      enlaces: z.array(z.string()).describe('Las URL del correo que corresponden a esta noticia.'),
       es_noticia: z.boolean().describe('Si merece una pieza en Akari.'),
       motivo: z.string().describe('Por qué sí o por qué no, en una frase.'),
     }),

@@ -63,6 +63,20 @@ const enfoque = (e: EntradaIndice) =>
     `De todo el correo, trabaja solo esta noticia:\n<noticia>\nTema: ${e.titulo}\nLo que dice el correo: ${e.resumen}\n</noticia>`,
   );
 
+/**
+ * Lo que recibe cada agente sobre una noticia. Si el correo trae una sola, va entero (con adjuntos);
+ * si es un boletín, solo el fragmento de esa noticia, para no pagar el boletín completo en cada paso.
+ */
+function bloquesNoticia(c: Correo, e: EntradaIndice, unica: boolean): Bloque[] {
+  if (unica) return [...bloquesCorreo(c), enfoque(e)];
+  const cabecera = `De: ${c.remitente}\nAsunto: ${c.asunto}\nFecha del correo: ${c.fecha.toISOString().slice(0, 10)}`;
+  const enlaces = e.enlaces.length ? `\n\nEnlaces de esta noticia:\n${e.enlaces.join('\n')}` : '';
+  return [
+    texto(`<correo>\n${cabecera}\n\n(Fragmento de un boletín con varias noticias.)\n\n${e.extracto}${enlaces}\n</correo>`),
+    enfoque(e),
+  ];
+}
+
 /** Especialista, paso 0: separar el correo en noticias y decidir cuáles merecen pieza. */
 export async function indexar(c: Correo, piezas: PiezaExistente[], consumo: Consumo) {
   const system = `${await papel('especialista')}\n\n${AVISO_DATOS}`;
@@ -85,14 +99,13 @@ export async function indexar(c: Correo, piezas: PiezaExistente[], consumo: Cons
 }
 
 /** Especialista, paso 1: localizar la fuente original y contrastar los datos en internet. */
-export async function contrastar(c: Correo, e: EntradaIndice, consumo: Consumo) {
+export async function contrastar(c: Correo, e: EntradaIndice, unica: boolean, consumo: Consumo) {
   const system = `${await papel('especialista')}\n\n${AVISO_DATOS}`;
   return investigar(
     'Especialista (contraste)',
     system,
     [
-      ...bloquesCorreo(c),
-      enfoque(e),
+      ...bloquesNoticia(c, e, unica),
       texto(
         'Antes de dictaminar, contrasta. Identifica la fuente original de lo que cuenta el correo y búscala en internet, ' +
           'preferentemente en la web del organismo que la emite. Comprueba los datos clave (fechas, plazos, importes, ' +
@@ -113,6 +126,7 @@ export async function contrastar(c: Correo, e: EntradaIndice, consumo: Consumo) 
 export async function dictaminar(
   c: Correo,
   e: EntradaIndice,
+  unica: boolean,
   nota: string,
   hilos: HiloExistente[],
   piezas: PiezaExistente[],
@@ -124,8 +138,7 @@ export async function dictaminar(
     Dictamen,
     system,
     [
-      ...bloquesCorreo(c),
-      enfoque(e),
+      ...bloquesNoticia(c, e, unica),
       bloqueContexto(hilos, piezas),
       texto(`Tu nota de contraste:\n<nota>\n${nota}\n</nota>\n\nEmite ahora el dictamen.`),
     ],
@@ -134,14 +147,14 @@ export async function dictaminar(
   );
 }
 
-export async function redactar(c: Correo, e: EntradaIndice, d: Dictamen, consumo: Consumo) {
+export async function redactar(c: Correo, e: EntradaIndice, unica: boolean, d: Dictamen, consumo: Consumo) {
   return estructurar(
     'Periodista',
     Pieza,
     `${await papel('periodista')}\n\n${AVISO_DATOS}`,
     [
-      texto(`<correo>\nAsunto: ${c.asunto}\n\n${c.texto}\n</correo>`),
-      enfoque(e),
+      // El periodista no necesita los adjuntos: trabaja con el dictamen y el texto.
+      ...(unica ? [texto(`<correo>\nAsunto: ${c.asunto}\n\n${c.texto}\n</correo>`), enfoque(e)] : bloquesNoticia(c, e, false)),
       texto(`Dictamen del especialista:\n${json(d)}\n\nEscribe la pieza.`),
     ],
     consumo,

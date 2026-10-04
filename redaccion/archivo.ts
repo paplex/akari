@@ -73,8 +73,21 @@ export async function nombreLibre(dir: string, base: string) {
   return nombre;
 }
 
+/** Quita los campos sin valor a cualquier profundidad: el YAML no sabe escribir `undefined`. */
+function sinVacios(v: unknown): unknown {
+  if (Array.isArray(v)) return v.map(sinVacios);
+  if (v && typeof v === 'object' && !(v instanceof Date)) {
+    return Object.fromEntries(
+      Object.entries(v)
+        .filter(([, x]) => x !== undefined)
+        .map(([k, x]) => [k, sinVacios(x)]),
+    );
+  }
+  return v;
+}
+
 export async function escribirMarkdown(dir: string, nombre: string, datos: Record<string, unknown>, cuerpo = '') {
-  const limpio = Object.fromEntries(Object.entries(datos).filter(([, v]) => v !== undefined));
+  const limpio = sinVacios(datos) as Record<string, unknown>;
   const texto = matter.stringify(cuerpo ? `\n${cuerpo.trim()}\n` : '', limpio);
   const ruta = path.join(dir, `${nombre}.md`);
   await writeFile(ruta, texto, 'utf8');

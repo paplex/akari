@@ -100,13 +100,13 @@ function informe(c: Correo, resultado: string, consumo: Consumo, indice: Indice 
 }
 
 /** Una noticia del correo, de principio a fin: contraste, dictamen, redacción, regla y archivo. */
-async function procesarNoticia(c: Correo, t: Traza, consumo: Consumo): Promise<Resultado> {
+async function procesarNoticia(c: Correo, t: Traza, unica: boolean, consumo: Consumo): Promise<Resultado> {
   // Se relee en cada noticia para ver también las piezas escritas en esta misma pasada.
   const { hilos, piezas } = await leerContexto();
   const e = t.entrada;
 
-  t.nota = await contrastar(c, e, consumo);
-  const d = (t.dictamen = await dictaminar(c, e, t.nota, hilos, piezas, consumo));
+  t.nota = await contrastar(c, e, unica, consumo);
+  const d = (t.dictamen = await dictaminar(c, e, unica, t.nota, hilos, piezas, consumo));
   if (!d.es_noticia) {
     t.resultado = 'descartado';
     return 'descartado';
@@ -117,7 +117,7 @@ async function procesarNoticia(c: Correo, t: Traza, consumo: Consumo): Promise<R
     return 'duplicado';
   }
 
-  t.periodista = await redactar(c, e, d, consumo);
+  t.periodista = await redactar(c, e, unica, d, consumo);
   t.pedagogo = await aclarar(d, t.periodista, consumo);
   t.linguista = await corregir(t.pedagogo, consumo);
   const p = (t.disenador = await maquetar(d, t.linguista, consumo));
@@ -190,7 +190,7 @@ async function procesar(c: Correo): Promise<{ resultado: Resultado; piezas: stri
     trazas.push(t);
     console.log(`    · ${entrada.titulo}`);
     try {
-      const r = await procesarNoticia(c, t, consumo);
+      const r = await procesarNoticia(c, t, elegidas.length === 1, consumo);
       console.log(`      ${r}${t.pieza ? ` → ${t.pieza}` : ''}`);
     } catch (e) {
       const motivo = e instanceof Error ? e.message : String(e);
