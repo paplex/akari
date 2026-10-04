@@ -6,7 +6,11 @@ interface Props {
 }
 
 const { data } = Astro.props.noticia;
-const publicacion = data.estado === 'auto' ? 'Publicada automáticamente' : 'Revisada por el equipo';
+const publicacion = {
+  auto: 'Publicada automáticamente',
+  revisada: 'Revisada por el equipo',
+  pendiente: 'Pendiente de revisión',
+}[data.estado];
 ---
 
 <dl class="ficha">
@@ -21,9 +25,16 @@ const publicacion = data.estado === 'auto' ? 'Publicada automáticamente' : 'Rev
   <div class="ficha__col">
     <dt>Fuente</dt>
     <dd>
-      <a href={data.fuente.enlace} rel="noopener noreferrer" target="_blank">
-        {data.fuente.nombre}<span class="sr-only"> (se abre en otra pestaña)</span>
-      </a>
+      {
+        data.fuente.enlace ? (
+          <a href={data.fuente.enlace} rel="noopener noreferrer" target="_blank">
+            {data.fuente.nombre}
+            <span class="sr-only"> (se abre en otra pestaña)</span>
+          </a>
+        ) : (
+          <span>{data.fuente.nombre}</span>
+        )
+      }
       <span class="ficha__dato"><time datetime={fechaISO(data.fecha)}>{fecha(data.fecha)}</time></span>
       <span class="ficha__dato">{publicacion}</span>
     </dd>

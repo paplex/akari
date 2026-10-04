@@ -1,0 +1,170 @@
+---
+import { render } from 'astro:content';
+import Base from '../layouts/Base.astro';
+import Ficha from '../components/Ficha.astro';
+import Desarrollo from '../components/Desarrollo.astro';
+import { getPendientes, PALABRA, MATERIA, fecha, fechaISO } from '../lib/akari';
+
+// Cola de revisión: lo único que muestra piezas pendientes. No enlaza a páginas propias
+// porque las pendientes no tienen ninguna hasta que alguien las revisa.
+const pendientes = await Promise.all(
+  (await getPendientes()).map(async (n) => ({ n, Content: (await render(n)).Content, cuerpo: Boolean(n.body?.trim()) })),
+);
+---
+
+<Base titulo="Revisión">
+  <div class="contenedor">
+    <h1 class="palabra gigante">Revisión</h1>
+    <p class="intro">
+      Piezas que la redacción no ha publicado sola. Para publicar una, abre su archivo y cambia{' '}
+      <code>estado: pendiente</code> por <code>estado: revisada</code>. Para descartarla, borra el archivo.
+    </p>
+
+    {
+      pendientes.length ? (
+        <ol class="lista">
+          {pendientes.map(({ n, Content, cuerpo }) => (
+            <li class="item">
+              <p class="item__meta">
+                <span class="palabra item__tipo">{PALABRA[n.data.tipo]}</span>
+                <span>
+                  {MATERIA[n.data.materia]} · <time datetime={fechaISO(n.data.fecha)}>{fecha(n.data.fecha)}</time>
+                </span>
+              </p>
+              <h2 class="item__titulo">{n.data.titulo}</h2>
+              <p class="item__esencial">{n.data.esencial}</p>
+
+              <div class="motivos">
+                <h3>Por qué está aquí</h3>
+                {n.data.motivos?.length ? (
+                  <ul>
+                    {n.data.motivos.map((m) => (
+                      <li>{m}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p>Marcada como pendiente a mano.</p>
+                )}
+                <p class="motivos__archivo">
+                  Archivo: <code>src/content/noticias/{n.id}.md</code>
+                </p>
+              </div>
+
+              <Ficha noticia={n} />
+              {cuerpo && (
+                <div class="item__desarrollo">
+                  <Desarrollo>
+                    <Content />
+                  </Desarrollo>
+                </div>
+              )}
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <p class="vacio">No hay nada pendiente de revisión.</p>
+      )
+    }
+  </div>
+</Base>
+
+<style>
+  .gigante {
+    display: block;
+    margin-top: clamp(16px, 3vw, 40px);
+    font-size: clamp(4.5rem, 19vw, 17rem);
+    line-height: 0.85;
+    color: var(--tinta);
+  }
+
+  .intro {
+    margin-top: clamp(16px, 2vw, 28px);
+    max-width: 60ch;
+    font-size: 1.125rem;
+    color: var(--gris);
+  }
+
+  code {
+    font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+    font-size: 0.875em;
+    color: var(--tinta);
+  }
+
+  .lista {
+    margin-top: clamp(40px, 6vw, 80px);
+  }
+
+  .item {
+    padding-block: clamp(32px, 4vw, 56px);
+    border-top: 5px solid var(--tinta);
+  }
+
+  .item__meta {
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+    font-size: 0.875rem;
+    color: var(--gris);
+  }
+
+  .item__tipo {
+    font-size: 2rem;
+    line-height: 1;
+  }
+
+  .item__titulo {
+    margin-top: 12px;
+    max-width: 34ch;
+    font-size: clamp(1.5rem, 1.1rem + 1.4vw, 2.5rem);
+    font-weight: 650;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+  }
+
+  .item__esencial {
+    margin-top: 14px;
+    max-width: 62ch;
+  }
+
+  .motivos {
+    margin-top: 28px;
+    max-width: 72ch;
+    padding: 20px 24px;
+    border-left: 4px solid var(--azul);
+    background: #f3f4ff;
+  }
+
+  .motivos h3 {
+    font-size: 0.9375rem;
+    font-weight: 650;
+    color: var(--azul);
+  }
+
+  .motivos ul {
+    margin-top: 10px;
+    padding-left: 1.1em;
+    list-style: disc;
+  }
+
+  .motivos li + li {
+    margin-top: 6px;
+  }
+
+  .motivos__archivo {
+    margin-top: 14px;
+    font-size: 0.875rem;
+    color: var(--gris);
+  }
+
+  .item__desarrollo :global(.contenedor) {
+    padding-inline: 0;
+  }
+
+  .vacio {
+    margin-top: clamp(40px, 6vw, 80px);
+    padding-top: 28px;
+    border-top: 1px solid var(--filete);
+    color: var(--gris);
+  }
+</style>

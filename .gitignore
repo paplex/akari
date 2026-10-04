@@ -7,3 +7,8 @@ dist/
 npm-debug.log*
 .claude/
 .playwright-mcp/
+
+# Redacción: correos reales y sus informes no salen de este equipo
+entrada/*
+!entrada/LEEME.md
+redaccion/informes/

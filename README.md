@@ -50,6 +50,37 @@ Las noticias en estado `pendiente` no salen en ninguna página; solo suman en el
 
 La portada muestra siempre la noticia publicada más reciente.
 
+## Redacción automática (fase 2)
+
+Convierte correos en piezas con cinco agentes de Claude y una regla de publicación fija.
+
+1. Crea un archivo `.env` en la raíz con tu clave de la API de Claude: `ANTHROPIC_API_KEY=...` (no se sube a GitHub).
+2. Guarda los correos como `.eml` en `entrada/` (en Gmail: tres puntos, "Descargar mensaje").
+3. Ejecuta `npm run redaccion`.
+
+Cada correo pasa por:
+
+| Agente | Qué hace |
+| --- | --- |
+| Especialista | Decide si hay noticia, localiza la fuente original, contrasta los datos en internet, clasifica materia y tipo y asigna hilo. |
+| Periodista | Escribe titular, lo esencial, a quién afecta, qué cambia en la práctica y el desarrollo. |
+| Pedagogo | Comprueba que se entienda a la primera y que la práctica diga qué hacer. |
+| Lingüista | Corrige la lengua y el estilo. |
+| Diseñador | Ajusta longitudes para que la pieza encaje en el diseño. |
+
+El papel de cada agente está en `redaccion/agentes/*.md`: se puede editar sin tocar código.
+
+**Regla de publicación** (`redaccion/publicacion.ts`). Sale publicada sola (`auto`) solo si se cumplen todas:
+
+- la fuente original es oficial y hay enlace a ella;
+- no es un análisis ni necesita interpretación;
+- el especialista ha contrastado los datos y no tiene dudas;
+- el texto respeta los límites de forma.
+
+Si falla cualquiera, queda `pendiente` con sus motivos, visibles en `/revision/`. Allí se publica cambiando el estado a `revisada`.
+
+Cada correo deja un informe con lo que hizo cada agente y el coste estimado en `redaccion/informes/` (no se sube a GitHub). Lo procesado se apunta en `entrada/procesados.json` y no se repite; `npm run redaccion -- --repetir` fuerza a repetir.
+
 ## Añadir un hilo
 
 Crea un archivo `.md` en `src/content/hilos/` con:

@@ -29,9 +29,13 @@ export async function getPublicadas(): Promise<Noticia[]> {
   return todas.sort(porFechaDesc);
 }
 
-export async function contarPendientes(): Promise<number> {
+export async function getPendientes(): Promise<Noticia[]> {
   const pendientes = await getCollection('noticias', ({ data }) => data.estado === 'pendiente');
-  return pendientes.length;
+  return pendientes.sort(porFechaDesc);
+}
+
+export async function contarPendientes(): Promise<number> {
+  return (await getPendientes()).length;
 }
 
 export interface Paso {
@@ -65,13 +69,13 @@ export async function getHilo(id: string, publicadas?: Noticia[]): Promise<HiloC
   return { hilo, pasos, ultima };
 }
 
-/** Todos los hilos, el de actividad más reciente primero. */
+/** Hilos con alguna pieza publicada, el de actividad más reciente primero. */
 export async function getHilos(publicadas?: Noticia[]): Promise<HiloConPasos[]> {
   const lista = publicadas ?? (await getPublicadas());
   const hilos = await getCollection('hilos');
   const conPasos = await Promise.all(hilos.map((h) => getHilo(h.id, lista)));
   return conPasos
-    .filter((h): h is HiloConPasos => h !== null)
+    .filter((h): h is HiloConPasos => h !== null && h.ultima !== null)
     .sort((a, b) => (b.ultima?.getTime() ?? 0) - (a.ultima?.getTime() ?? 0));
 }
 

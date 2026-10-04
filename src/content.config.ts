@@ -17,11 +17,14 @@ const noticias = defineCollection({
     practica: z.string(),
     fuente: z.object({
       nombre: z.string(),
-      enlace: z.url(),
+      enlace: z.url().optional(),
     }),
     fecha: z.coerce.date(),
     hilo: reference('hilos').optional(),
     estado: z.enum(ESTADOS),
+    // Rellenados por la redacción automática; no se muestran en las páginas públicas.
+    motivos: z.array(z.string()).optional(),
+    origen: z.string().optional(),
   }),
 });
 

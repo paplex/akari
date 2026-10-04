@@ -38,7 +38,9 @@ const aviso = pendientes === 1 ? '1 pieza pendiente de tu revisión' : `${pendie
   {
     pendientes > 0 && (
       <div class="contenedor">
-        <p class="aviso" role="status">{aviso}</p>
+        <p class="aviso">
+          <a href="/revision/" aria-current={ruta === '/revision' ? 'page' : undefined}>{aviso}</a>
+        </p>
       </div>
     )
   }
@@ -101,6 +103,15 @@ const aviso = pendientes === 1 ? '1 pieza pendiente de tu revisión' : `${pendie
     font-size: 0.875rem;
     font-weight: 500;
     color: var(--azul);
+  }
+
+  .aviso a {
+    text-decoration: none;
+  }
+
+  .aviso a:hover,
+  .aviso a[aria-current='page'] {
+    text-decoration: underline;
   }
 
   @media (max-width: 640px) {
